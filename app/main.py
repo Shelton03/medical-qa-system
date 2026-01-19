@@ -4,12 +4,14 @@ from app.api import routes
 from app.core.config import settings
 from app.db.mongodb import db_client
 from app.core.logger import logger
+from app.services.nlp_service import initialize_qa_pipeline
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting up Medical QA System...")
     db_client.connect()
+    initialize_qa_pipeline()
     yield
     # Shutdown
     logger.info("Shutting down Medical QA System...")
