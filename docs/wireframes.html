@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<title>Mirage — UI Wireframes</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Arial', sans-serif; background: #fff; color: #1a1917; }
+  
+  .page { width: 1100px; margin: 0 auto; padding: 40px 48px; page-break-after: always; }
+  .page:last-child { page-break-after: avoid; }
+
+  .doc-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 16px; border-bottom: 2px solid #0A3828; margin-bottom: 32px; }
+  .doc-logo { display: flex; align-items: center; gap: 10px; }
+  .doc-logo-m { width: 32px; height: 32px; background: #0A3828; color: #fff; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; }
+  .doc-title { font-size: 15px; font-weight: 700; color: #0A3828; }
+  .doc-meta { font-size: 12px; color: #6B6760; }
+
+  .section-title { font-size: 22px; font-weight: 800; color: #0A3828; margin-bottom: 6px; }
+  .section-sub { font-size: 13px; color: #6B6760; margin-bottom: 24px; }
+
+  .screens-row { display: flex; gap: 28px; align-items: flex-start; margin-bottom: 32px; }
+  .screen-group { display: flex; flex-direction: column; align-items: center; }
+  .screen-label { font-size: 11px; font-weight: 700; color: #6B6760; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; text-align: center; }
+  .screen-step { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: #0A3828; color: #fff; font-size: 10px; font-weight: 700; margin-right: 5px; }
+  .annot { margin-top: 12px; display: flex; flex-direction: column; gap: 5px; align-self: flex-start; }
+  .annot-item { display: flex; gap: 7px; align-items: flex-start; }
+  .annot-num { min-width: 18px; height: 18px; border-radius: 50%; background: #18A358; color: #fff; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+  .annot-text { font-size: 11px; color: #444; line-height: 1.5; }
+
+  /* Phone frame */
+  .phone { width: 220px; background: #1a1a1a; border-radius: 28px; padding: 14px 10px 18px; flex-shrink: 0; }
+  .phone-notch { width: 60px; height: 5px; background: #333; border-radius: 3px; margin: 0 auto 10px; }
+  .phone-screen { background: #f8f8f8; border-radius: 16px; overflow: hidden; min-height: 380px; }
+  .phone-statusbar { background: #0A3828; padding: 6px 12px; display: flex; justify-content: space-between; }
+  .phone-statusbar span { color: rgba(255,255,255,0.7); font-size: 9px; }
+
+  /* Browser frame */
+  .browser { width: 480px; border: 1.5px solid #D0CCC6; border-radius: 10px; overflow: hidden; flex-shrink: 0; }
+  .browser-bar { background: #F0EEE9; border-bottom: 1px solid #D0CCC6; padding: 7px 12px; display: flex; align-items: center; gap: 6px; }
+  .browser-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .browser-url { flex: 1; background: #fff; border: 1px solid #D0CCC6; border-radius: 4px; padding: 3px 8px; font-size: 10px; color: #888; margin: 0 8px; }
+  .browser-screen { background: #fff; min-height: 300px; }
+
+  /* UI element helpers */
+  .wf-topbar { background: #0A3828; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; }
+  .wf-topbar-t { color: #fff; font-size: 13px; font-weight: 700; }
+  .wf-topbar-sub { color: rgba(255,255,255,0.6); font-size: 10px; }
+  .wf-topbar-icon { width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,0.15); }
+
+  .wf-body { padding: 12px; }
+  .wf-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .wf-box { background: #E8E5DF; border-radius: 5px; }
+  .wf-box-green { background: #ECFDF5; border: 1px solid #18A358; border-radius: 5px; }
+  .wf-box-orange { background: #FFF7ED; border: 1px solid #EA580C; border-radius: 5px; }
+  .wf-box-blue { background: #EFF6FF; border: 1px solid #2563EB; border-radius: 5px; }
+  .wf-input { border: 1px solid #D0CCC6; border-radius: 6px; background: #FAFAF8; }
+  .wf-btn { background: #0A3828; border-radius: 7px; display: flex; align-items: center; justify-content: center; }
+  .wf-btn-text { color: #fff; font-size: 11px; font-weight: 600; padding: 8px 14px; text-align: center; }
+  .wf-btn-sm { background: #0A3828; border-radius: 6px; padding: 6px 10px; }
+  .wf-label { font-size: 9px; color: #888; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; }
+  .wf-text-lg { font-size: 14px; font-weight: 700; color: #1a1917; }
+  .wf-text-md { font-size: 12px; color: #1a1917; }
+  .wf-text-sm { font-size: 10px; color: #6B6760; }
+  .wf-divider { height: 1px; background: #E8E5DF; margin: 8px 0; }
+  .wf-card { background: #fff; border: 1px solid #E0DDD6; border-radius: 8px; padding: 10px; margin-bottom: 7px; }
+  .wf-tag-green { background: #18A358; color: #fff; border-radius: 4px; padding: 2px 7px; font-size: 9px; font-weight: 700; }
+  .wf-tag-orange { background: #EA580C; color: #fff; border-radius: 4px; padding: 2px 7px; font-size: 9px; font-weight: 700; }
+  .wf-tag-blue { background: #2563EB; color: #fff; border-radius: 4px; padding: 2px 7px; font-size: 9px; font-weight: 700; }
+  .wf-avatar { width: 28px; height: 28px; border-radius: 50%; background: #D0CCC6; }
+  .wf-icon-box { width: 32px; height: 32px; border-radius: 8px; background: #2563EB; display: flex; align-items: center; justify-content: center; }
+  .wf-chat-ai { background: #EFF6FF; border-radius: 4px 12px 12px 12px; padding: 8px 10px; margin-bottom: 6px; font-size: 10px; color: #1a1917; line-height: 1.5; }
+  .wf-chat-dr { background: #ECFDF5; border-radius: 12px 4px 12px 12px; padding: 8px 10px; margin-bottom: 6px; font-size: 10px; color: #1a1917; line-height: 1.5; align-self: flex-end; max-width: 80%; margin-left: auto; }
+  .wf-progress { height: 4px; background: #E0DDD6; border-radius: 2px; overflow: hidden; margin-bottom: 2px; }
+  .wf-progress-fill { height: 100%; background: #18A358; border-radius: 2px; }
+  .wf-sidebar { width: 140px; background: #F8F7F4; border-right: 1px solid #E0DDD6; padding: 10px 8px; min-height: 300px; }
+  .wf-sidebar-item { padding: 7px 8px; border-radius: 6px; margin-bottom: 2px; font-size: 10px; color: #6B6760; }
+  .wf-sidebar-item.active { background: #ECFDF5; color: #0A3828; font-weight: 700; }
+  .wf-main { flex: 1; padding: 12px; }
+  .wf-notification { background: #fff; border: 1.5px solid #EA580C; border-radius: 10px; padding: 12px; margin-bottom: 8px; }
+
+  @media print {
+    .page { page-break-after: always; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     PAGE 1 — PATIENT APP
+════════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="doc-header">
+    <div class="doc-logo">
+      <div class="doc-logo-m">M</div>
+      <span class="doc-title">Mirage — Patient Mobile App · Wireframes</span>
+    </div>
+    <div class="doc-meta">Cimas Healthathon 3.0 · UI Design</div>
+  </div>
+
+  <div class="section-title">Patient App — Core Screens</div>
+  <div class="section-sub">Android-first application. Patient registration, health record access, consent management, and pre-visit AI symptom check.</div>
+
+  <div class="screens-row">
+
+    <!-- Screen 1: Home / Dashboard -->
+    <div class="screen-group">
+      <div class="screen-label"><span class="screen-step">1</span>Home Dashboard</div>
+      <div class="phone">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <div class="phone-statusbar"><span>9:41</span><span>●●●</span></div>
+          <div class="wf-topbar">
+            <div>
+              <div class="wf-topbar-t">Mirage</div>
+              <div class="wf-topbar-sub">Tendai Moyo · ZW-MR-04821</div>
+            </div>
+            <div class="wf-avatar"></div>
+          </div>
+          <div class="wf-body">
+            <!-- Health score card -->
+            <div class="wf-box-green" style="padding:10px;margin-bottom:8px;border-radius:8px;">
+              <div style="font-size:9px;color:#6B6760;font-weight:700;text-transform:uppercase;margin-bottom:4px;">My Health Record</div>
+              <div style="font-size:13px;font-weight:800;color:#0A3828;">Tendai Moyo</div>
+              <div style="font-size:10px;color:#444;margin-top:2px;">3 visits · 1 allergy on record</div>
+            </div>
+            <!-- Quick actions -->
+            <div class="wf-label">Quick actions</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;">
+              <div class="wf-box" style="padding:8px;border-radius:7px;">
+                <div class="wf-box" style="width:18px;height:18px;border-radius:4px;margin-bottom:4px;"></div>
+                <div style="font-size:10px;font-weight:600;">My Records</div>
+              </div>
+              <div class="wf-box" style="padding:8px;border-radius:7px;">
+                <div class="wf-box" style="width:18px;height:18px;border-radius:4px;margin-bottom:4px;background:#2563EB;opacity:0.3;"></div>
+                <div style="font-size:10px;font-weight:600;">Check Symptoms</div>
+              </div>
+              <div class="wf-box" style="padding:8px;border-radius:7px;">
+                <div class="wf-box" style="width:18px;height:18px;border-radius:4px;margin-bottom:4px;background:#EA580C;opacity:0.3;"></div>
+                <div style="font-size:10px;font-weight:600;">Access Log</div>
+              </div>
+              <div class="wf-box" style="padding:8px;border-radius:7px;">
+                <div class="wf-box" style="width:18px;height:18px;border-radius:4px;margin-bottom:4px;"></div>
+                <div style="font-size:10px;font-weight:600;">ID Card</div>
+              </div>
+            </div>
+            <!-- Last visit -->
+            <div class="wf-label">Last visit</div>
+            <div class="wf-card">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                  <div style="font-size:10px;font-weight:700;">Malaria (P. falciparum)</div>
+                  <div style="font-size:9px;color:#888;">Harare Central · Mar 2024</div>
+                </div>
+                <div class="wf-tag-green">Treated</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="annot">
+        <div class="annot-item"><div class="annot-num">1</div><div class="annot-text">National ID displayed — verified against registry</div></div>
+        <div class="annot-item"><div class="annot-num">2</div><div class="annot-text">Summary: total visits, active allergies, chronic conditions</div></div>
+        <div class="annot-item"><div class="annot-num">3</div><div class="annot-text">Quick access to key functions</div></div>
+        <div class="annot-item"><div class="annot-num">4</div><div class="annot-text">Most recent visit surfaced immediately</div></div>
+      </div>
+    </div>
+
+    <!-- Screen 2: Consent Notification -->
+    <div class="screen-group">
+      <div class="screen-label"><span class="screen-step">2</span>Consent Request</div>
+      <div class="phone">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <div class="phone-statusbar"><span>9:44</span><span>●●●</span></div>
+          <div style="background:#EA580C;padding:10px 14px;">
+            <div style="color:rgba(255,255,255,0.7);font-size:9px;font-weight:700;letter-spacing:0.1em;">MIRAGE HEALTH</div>
+            <div style="color:#fff;font-size:14px;font-weight:800;margin-top:2px;">Access Request</div>
+          </div>
+          <div class="wf-body">
+            <div class="wf-notification">
+              <div style="font-size:11px;font-weight:700;color:#EA580C;margin-bottom:6px;">⚡ New access request</div>
+              <div style="font-size:12px;font-weight:700;color:#1a1917;margin-bottom:4px;">Dr. Chiedza Ncube</div>
+              <div style="font-size:10px;color:#444;line-height:1.5;margin-bottom:8px;">
+                United Bulawayo Hospitals<br>
+                Reg. MDPCZ-2018-0442 · <span style="color:#18A358;font-weight:700;">✓ Verified</span>
+              </div>
+              <div style="font-size:10px;color:#6B6760;background:#F8F7F4;border-radius:6px;padding:7px;margin-bottom:8px;">
+                Requesting access to: <strong>Full medical history</strong><br>
+                Duration: This consultation only
+              </div>
+              <div style="display:flex;gap:7px;">
+                <div class="wf-btn" style="flex:1;"><div class="wf-btn-text">Allow access</div></div>
+                <div style="flex:1;border:1px solid #D0CCC6;border-radius:7px;display:flex;align-items:center;justify-content:center;padding:8px;">
+                  <span style="font-size:11px;color:#6B6760;">Deny</span>
+                </div>
+              </div>
+            </div>
+            <div style="font-size:10px;color:#888;text-align:center;margin-top:4px;">Only verified practitioners can send requests</div>
+          </div>
+        </div>
+      </div>
+      <div class="annot">
+        <div class="annot-item"><div class="annot-num">1</div><div class="annot-text">Practitioner verified against national Clinician Registry before request is sent</div></div>
+        <div class="annot-item"><div class="annot-num">2</div><div class="annot-text">Patient sees name, facility, and registration number clearly</div></div>
+        <div class="annot-item"><div class="annot-num">3</div><div class="annot-text">Scope of access is explicit — no ambiguous permissions</div></div>
+        <div class="annot-item"><div class="annot-num">4</div><div class="annot-text">One-tap Approve / Deny — decision is instant</div></div>
+      </div>
+    </div>
+
+    <!-- Screen 3: My Health Records -->
+    <div class="screen-group">
+      <div class="screen-label"><span class="screen-step">3</span>My Health Record</div>
+      <div class="phone">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <div class="phone-statusbar"><span>10:01</span><span>●●●</span></div>
+          <div class="wf-topbar">
+            <div>
+              <div style="color:rgba(255,255,255,0.7);font-size:9px;">← Back</div>
+              <div class="wf-topbar-t">My Health Record</div>
+            </div>
+          </div>
+          <div class="wf-body">
+            <div class="wf-box-orange" style="padding:8px;border-radius:7px;margin-bottom:8px;">
+              <div style="font-size:10px;font-weight:700;color:#EA580C;">⚠ Allergy on record</div>
+              <div style="font-size:9px;color:#444;margin-top:1px;">Penicillin — notify all providers</div>
+            </div>
+            <div class="wf-label">Visit history (3 records)</div>
+            <div class="wf-card">
+              <div style="display:flex;justify-content:space-between;">
+                <div style="font-size:10px;font-weight:700;">Malaria (P. falciparum)</div>
+                <div style="font-size:9px;color:#888;">Mar 2024</div>
+              </div>
+              <div style="font-size:9px;color:#888;margin-top:2px;">Harare Central Hospital</div>
+              <div style="font-size:9px;color:#444;margin-top:1px;">Rx: Artemether-Lumefantrine</div>
+            </div>
+            <div class="wf-card">
+              <div style="display:flex;justify-content:space-between;">
+                <div style="font-size:10px;font-weight:700;">URTI</div>
+                <div style="font-size:9px;color:#888;">Nov 2023</div>
+              </div>
+              <div style="font-size:9px;color:#888;margin-top:2px;">Avenues Clinic</div>
+              <div style="font-size:9px;color:#444;margin-top:1px;">Rx: Amoxicillin 500mg</div>
+            </div>
+            <div class="wf-card">
+              <div style="display:flex;justify-content:space-between;">
+                <div style="font-size:10px;font-weight:700;">Typhoid fever</div>
+                <div style="font-size:9px;color:#888;">Jun 2022</div>
+              </div>
+              <div style="font-size:9px;color:#888;margin-top:2px;">Parirenyatwa Hospital</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="annot">
+        <div class="annot-item"><div class="annot-num">1</div><div class="annot-text">Critical allergies pinned at top — never buried</div></div>
+        <div class="annot-item"><div class="annot-num">2</div><div class="annot-text">Full visit history — date, facility, diagnosis, treatment</div></div>
+        <div class="annot-item"><div class="annot-num">3</div><div class="annot-text">Patient can view but not edit records (edit rights held by practitioners)</div></div>
+      </div>
+    </div>
+
+    <!-- Screen 4: Symptom Checker -->
+    <div class="screen-group">
+      <div class="screen-label"><span class="screen-step">4</span>AI Symptom Check</div>
+      <div class="phone">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <div class="phone-statusbar"><span>8:22</span><span>●●●</span></div>
+          <div class="wf-topbar">
+            <div class="wf-topbar-t">Symptom Check</div>
+            <div class="wf-topbar-sub">Pre-visit AI assessment</div>
+          </div>
+          <div class="wf-body">
+            <div class="wf-box-blue" style="padding:8px;border-radius:7px;margin-bottom:8px;">
+              <div style="font-size:10px;color:#2563EB;font-weight:700;">📋 AI using your health record</div>
+              <div style="font-size:9px;color:#444;margin-top:1px;">History and allergies already loaded</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0;">
+              <div class="wf-chat-ai">Good morning, Tendai. What brings you in today? Please describe your main symptoms.</div>
+              <div class="wf-chat-dr">Fever for 4 days, headache, joint pain</div>
+              <div class="wf-chat-ai">Given your prior malaria in March, I need to ask — are you experiencing any chills or sweating episodes?</div>
+            </div>
+            <div style="border-top:1px solid #E0DDD6;padding-top:8px;margin-top:4px;">
+              <div style="display:flex;gap:6px;">
+                <div class="wf-input" style="flex:1;padding:7px 10px;font-size:10px;color:#888;">Type your response…</div>
+                <div class="wf-btn-sm"><div style="color:#fff;font-size:10px;font-weight:700;">Send</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="annot">
+        <div class="annot-item"><div class="annot-num">1</div><div class="annot-text">AI pre-loaded with patient history — questions are targeted, not generic</div></div>
+        <div class="annot-item"><div class="annot-num">2</div><div class="annot-text">Conversational format — accessible to all literacy levels</div></div>
+        <div class="annot-item"><div class="annot-num">3</div><div class="annot-text">Interaction logged to patient record — visible to next practitioner</div></div>
+      </div>
+    </div>
+
+  </div><!-- /screens-row -->
+
+  <div style="border-top:1px solid #E0DDD6;padding-top:12px;display:flex;justify-content:space-between;font-size:11px;color:#888;">
+    <span>Mirage · Patient Mobile App · Wireframes</span>
+    <span>Cimas Healthathon 3.0</span>
+  </div>
+</div><!-- /page 1 -->
+
+
+<!-- ═══════════════════════════════════════════════════════
+     PAGE 2 — DOCTOR PORTAL
+════════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="doc-header">
+    <div class="doc-logo">
+      <div class="doc-logo-m">M</div>
+      <span class="doc-title">Mirage — Doctor Web Portal · Wireframes</span>
+    </div>
+    <div class="doc-meta">Cimas Healthathon 3.0 · UI Design</div>
+  </div>
+
+  <div class="section-title">Doctor Portal — Core Screens</div>
+  <div class="section-sub">Web application (React). Optimised for low-bandwidth environments. Patient search, records access, AI-assisted diagnosis, clinical documentation.</div>
+
+  <!-- Row 1: Two wider browser screens -->
+  <div class="screens-row">
+
+    <!-- Screen 1: Patient Search -->
+    <div class="screen-group">
+      <div class="screen-label"><span class="screen-step">1</span>Patient Search</div>
+      <div class="browser">
+        <div class="browser-bar">
+          <div class="browser-dot" style="background:#FF5F57;"></div>
+          <div class="browser-dot" style="background:#FEBC2E;"></div>
+          <div class="browser-dot" style="background:#28C840;"></div>
+          <div class="browser-url">mirage.health.zw/portal</div>
+        </div>
+        <div class="browser-screen" style="display:flex;">
+          <div class="wf-sidebar">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
+              <div style="width:22px;height:22px;background:#0A3828;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;">M</div>
+              <span style="font-size:11px;font-weight:700;color:#0A3828;">Mirage</span>
+            </div>
+            <div class="wf-sidebar-item active">🔍 Patient Search</div>
+            <div class="wf-sidebar-item">📋 Today's Queue</div>
+            <div class="wf-sidebar-item">📊 Analytics</div>
+            <div style="margin-top:auto;padding-top:8px;border-top:1px solid #E0DDD6;font-size:9px;color:#888;margin-top:120px;">
+              Dr. Ncube<br>UBH · MDPCZ-2018-0442
+            </div>
+          </div>
+          <div class="wf-main">
+            <div style="font-size:13px;font-weight:800;color:#0A3828;margin-bottom:10px;">Search National Registry</div>
+            <div style="display:flex;gap:6px;margin-bottom:12px;">
+              <div class="wf-input" style="flex:1;padding:8px 12px;font-size:11px;color:#1a1917;">Tendai Moyo</div>
+              <div class="wf-btn" style="padding:0 14px;"><span style="color:#fff;font-size:11px;font-weight:700;">Search</span></div>
+            </div>
+            <!-- Search result -->
+            <div style="border:1.5px solid #18A358;border-radius:8px;padding:10px;background:#ECFDF5;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+                <div>
+                  <div style="font-size:13px;font-weight:800;">Tendai Moyo</div>
+                  <div style="font-size:10px;color:#888;">DOB: 14 March 1988 (age 36)</div>
+                  <div style="font-size:10px;color:#888;">ID: ZW-MR-04821 · Blood type: O+</div>
+                </div>
+                <div class="wf-tag-green">✓ Found</div>
+              </div>
+              <div class="wf-btn" style="padding:0;"><div class="wf-btn-text" style="padding:7px 14px;font-size:11px;">Request medical records</div></div>
+            </div>
+            <div style="font-size:10px;color:#888;margin-top:8px;">Or <span style="color:#0A3828;font-weight:700;">register new patient</span> if not in registry</div>
+          </div>
+        </div>
+      </div>
+      <div class="annot" style="max-width:220px;">
+        <div class="annot-item"><div class="annot-num">1</div><div class="annot-text">Search by name or national ID</div></div>
+        <div class="annot-item"><div class="annot-num">2</div><div class="annot-text">Match found — basic info visible before consent granted</div></div>
+        <div class="annot-item"><div class="annot-num">3</div><div class="annot-text">Request records button triggers consent notification to patient</div></div>
+        <div class="annot-item"><div class="annot-num">4</div><div class="annot-text">New patient enrolment path if not registered</div></div>
+      </div>
+    </div>
+
+    <!-- Screen 2: Patient Records -->
+    <div class="screen-group">
+      <div class="screen-label"><span class="screen-step">2</span>Patient Records View</div>
+      <div class="browser">
+        <div class="browser-bar">
+          <div class="browser-dot" style="background:#FF5F57;"></div>
+          <div class="browser-dot" style="background:#FEBC2E;"></div>
+          <div class="browser-dot" style="background:#28C840;"></div>
+          <div class="browser-url">mirage.health.zw/portal/patient/04821</div>
+        </div>
+        <div class="browser-screen" style="display:flex;">
+          <div class="wf-sidebar">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
+              <div style="width:22px;height:22px;background:#0A3828;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;">M</div>
+              <span style="font-size:11px;font-weight:700;color:#0A3828;">Mirage</span>
+            </div>
+            <div class="wf-sidebar-item active">← Tendai Moyo</div>
+            <div class="wf-sidebar-item" style="padding-left:16px;">📋 Records</div>
+            <div class="wf-sidebar-item" style="padding-left:16px;">🤖 AI Diagnosis</div>
+            <div class="wf-sidebar-item" style="padding-left:16px;">📝 New Note</div>
+          </div>
+          <div class="wf-main">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+              <div>
+                <div style="font-size:13px;font-weight:800;">Tendai Moyo</div>
+                <div style="font-size:10px;color:#888;">DOB: 14 March 1988 · ZW-MR-04821 · O+</div>
+              </div>
+              <div class="wf-tag-orange">⚠ Penicillin allergy</div>
+            </div>
+            <div style="display:grid;grid-template-columns:80px 1fr;gap:8px;">
+              <div style="background:#F8F7F4;border:1px solid #E0DDD6;border-radius:6px;padding:8px;">
+                <div style="font-size:9px;color:#888;margin-bottom:4px;">SUMMARY</div>
+                <div style="font-size:9px;color:#888;margin-bottom:2px;">Visits</div>
+                <div style="font-size:13px;font-weight:800;color:#0A3828;">3</div>
+                <div style="font-size:9px;color:#888;margin-top:4px;margin-bottom:2px;">Allergies</div>
+                <div style="font-size:13px;font-weight:800;color:#0A3828;">1</div>
+                <div style="font-size:9px;color:#888;margin-top:4px;margin-bottom:2px;">Last seen</div>
+                <div style="font-size:10px;font-weight:700;color:#0A3828;">Mar 2024</div>
+              </div>
+              <div>
+                <div style="font-size:9px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px;">VISIT HISTORY</div>
+                <div style="background:#fff;border:1px solid #E0DDD6;border-radius:6px;padding:7px;margin-bottom:5px;">
+                  <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;font-weight:700;">Malaria (P. falciparum)</span><span style="font-size:9px;color:#888;">Mar 2024</span></div>
+                  <div style="font-size:9px;color:#888;">Harare Central · Dr. T. Mutasa</div>
+                  <div style="font-size:9px;color:#444;">Rx: Artemether-Lumefantrine</div>
+                </div>
+                <div style="background:#fff;border:1px solid #E0DDD6;border-radius:6px;padding:7px;margin-bottom:5px;">
+                  <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;font-weight:700;">URTI</span><span style="font-size:9px;color:#888;">Nov 2023</span></div>
+                  <div style="font-size:9px;color:#888;">Avenues Clinic</div>
+                </div>
+                <div style="background:#fff;border:1px solid #E0DDD6;border-radius:6px;padding:7px;">
+                  <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;font-weight:700;">Typhoid fever</span><span style="font-size:9px;color:#888;">Jun 2022</span></div>
+                  <div style="font-size:9px;color:#888;">Parirenyatwa Hospital</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="annot" style="max-width:220px;">
+        <div class="annot-item"><div class="annot-num">1</div><div class="annot-text">Allergy flag permanently pinned — never buried in history</div></div>
+        <div class="annot-item"><div class="annot-num">2</div><div class="annot-text">Summary stats at a glance before reading full history</div></div>
+        <div class="annot-item"><div class="annot-num">3</div><div class="annot-text">Full visit log — sorted newest first, cross-facility</div></div>
+      </div>
+    </div>
+
+  </div><!-- /row 1 -->
+
+  <!-- Row 2: AI Diagnostic + Confirmation -->
+  <div class="screens-row">
+
+    <!-- Screen 3: AI Diagnostic Chat -->
+    <div class="screen-group">
+      <div class="screen-label"><span class="screen-step">3</span>AI Diagnostic Session</div>
+      <div class="browser">
+        <div class="browser-bar">
+          <div class="browser-dot" style="background:#FF5F57;"></div>
+          <div class="browser-dot" style="background:#FEBC2E;"></div>
+          <div class="browser-dot" style="background:#28C840;"></div>
+          <div class="browser-url">mirage.health.zw/portal/patient/04821/ai</div>
+        </div>
+        <div class="browser-screen" style="display:flex;">
+          <div class="wf-sidebar">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
+              <div style="width:22px;height:22px;background:#0A3828;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;">M</div>
+              <span style="font-size:11px;font-weight:700;color:#0A3828;">Mirage</span>
+            </div>
+            <div class="wf-sidebar-item">← Tendai Moyo</div>
+            <div class="wf-sidebar-item" style="padding-left:16px;">📋 Records</div>
+            <div class="wf-sidebar-item active" style="padding-left:16px;">🤖 AI Diagnosis</div>
+            <div class="wf-sidebar-item" style="padding-left:16px;">📝 New Note</div>
+          </div>
+          <div class="wf-main">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <div class="wf-icon-box"><span style="color:#fff;font-size:10px;font-weight:800;">AI</span></div>
+              <div>
+                <div style="font-size:12px;font-weight:800;">Mirage Diagnostic AI</div>
+                <div style="font-size:10px;color:#888;">MEDIC assessment · Tendai Moyo</div>
+              </div>
+            </div>
+            <div style="background:#F8F7F4;border-radius:6px;padding:7px;font-size:10px;color:#888;margin-bottom:8px;">
+              <strong style="color:#1a1917;">Chief complaint:</strong> Fever · Headache · Joint pain · 4 days
+            </div>
+            <div style="height:160px;overflow:hidden;display:flex;flex-direction:column;gap:4px;margin-bottom:8px;">
+              <div class="wf-chat-ai">I've reviewed Tendai's history. Given the prior malaria in March, I need to determine if this could be recurrence or a new condition. Is there any difference in the character of this fever compared to his previous episodes?</div>
+              <div class="wf-chat-dr">Similar pattern — intermittent, worse in evenings.</div>
+              <div class="wf-chat-ai">And has he had any rigors? Any exposure to areas with reported dengue activity?</div>
+            </div>
+            <div style="border-top:1px solid #E0DDD6;padding-top:8px;">
+              <div style="display:flex;gap:6px;">
+                <div class="wf-input" style="flex:1;padding:7px 10px;font-size:10px;color:#888;">Respond on behalf of patient…</div>
+                <div class="wf-btn" style="padding:0 10px;"><span style="color:#fff;font-size:10px;font-weight:700;">Send</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="annot" style="max-width:220px;">
+        <div class="annot-item"><div class="annot-num">1</div><div class="annot-text">AI asks targeted MEDIC-based questions — not a generic checklist</div></div>
+        <div class="annot-item"><div class="annot-num">2</div><div class="annot-text">Questions informed by patient history — AI references prior malaria</div></div>
+        <div class="annot-item"><div class="annot-num">3</div><div class="annot-text">Doctor conducts or relays the conversation</div></div>
+      </div>
+    </div>
+
+    <!-- Screen 4: Diagnosis Review -->
+    <div class="screen-group">
+      <div class="screen-label"><span class="screen-step">4</span>Diagnosis Review + Confirm</div>
+      <div class="browser">
+        <div class="browser-bar">
+          <div class="browser-dot" style="background:#FF5F57;"></div>
+          <div class="browser-dot" style="background:#FEBC2E;"></div>
+          <div class="browser-dot" style="background:#28C840;"></div>
+          <div class="browser-url">mirage.health.zw/portal/patient/04821/ai/review</div>
+        </div>
+        <div class="browser-screen" style="display:flex;">
+          <div class="wf-sidebar">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
+              <div style="width:22px;height:22px;background:#0A3828;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;">M</div>
+              <span style="font-size:11px;font-weight:700;color:#0A3828;">Mirage</span>
+            </div>
+            <div class="wf-sidebar-item">← Tendai Moyo</div>
+            <div class="wf-sidebar-item" style="padding-left:16px;">📋 Records</div>
+            <div class="wf-sidebar-item active" style="padding-left:16px;">🤖 AI Diagnosis</div>
+          </div>
+          <div class="wf-main">
+            <div style="font-size:12px;font-weight:800;color:#0A3828;margin-bottom:4px;">AI Differential — Doctor Review</div>
+            <div style="font-size:10px;color:#888;margin-bottom:8px;">All suggestions require confirmation before recording</div>
+            <!-- Dx cards -->
+            <div style="border:1.5px solid #18A358;border-radius:7px;padding:8px;background:#ECFDF5;margin-bottom:5px;">
+              <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <div style="font-size:11px;font-weight:800;">Malaria (recurrence)</div>
+                <div style="font-size:12px;font-weight:800;color:#18A358;">76%</div>
+              </div>
+              <div class="wf-progress"><div class="wf-progress-fill" style="width:76%;"></div></div>
+            </div>
+            <div style="border:1px solid #E0DDD6;border-radius:7px;padding:8px;background:#fff;margin-bottom:5px;">
+              <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <div style="font-size:11px;">Typhoid fever</div>
+                <div style="font-size:12px;font-weight:700;color:#888;">34%</div>
+              </div>
+              <div class="wf-progress"><div class="wf-progress-fill" style="width:34%;background:#D0CCC6;"></div></div>
+            </div>
+            <div style="border:1px solid #E0DDD6;border-radius:7px;padding:8px;background:#fff;margin-bottom:8px;">
+              <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <div style="font-size:11px;">Dengue fever</div>
+                <div style="font-size:12px;font-weight:700;color:#888;">18%</div>
+              </div>
+              <div class="wf-progress"><div class="wf-progress-fill" style="width:18%;background:#D0CCC6;"></div></div>
+            </div>
+            <!-- Next steps -->
+            <div style="background:#EFF6FF;border:1px solid #2563EB30;border-radius:7px;padding:8px;margin-bottom:8px;font-size:10px;color:#1a1917;">
+              <strong style="color:#2563EB;">Next steps:</strong> Order thick blood smear. ⚠ Note Penicillin allergy — avoid in antibiotic choices.
+            </div>
+            <div class="wf-btn"><div class="wf-btn-text">Confirm diagnosis + update record</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="annot" style="max-width:220px;">
+        <div class="annot-item"><div class="annot-num">1</div><div class="annot-text">Ranked differential with confidence scores</div></div>
+        <div class="annot-item"><div class="annot-num">2</div><div class="annot-text">AI-suggested next steps — always includes active allergy flags</div></div>
+        <div class="annot-item"><div class="annot-num">3</div><div class="annot-text">Doctor confirms — record update only happens on approval</div></div>
+        <div class="annot-item"><div class="annot-num">4</div><div class="annot-text">Doctor can modify diagnosis before confirming</div></div>
+      </div>
+    </div>
+
+  </div><!-- /row 2 -->
+
+  <div style="border-top:1px solid #E0DDD6;padding-top:12px;display:flex;justify-content:space-between;font-size:11px;color:#888;">
+    <span>Mirage · Doctor Web Portal · Wireframes</span>
+    <span>Cimas Healthathon 3.0</span>
+  </div>
+</div><!-- /page 2 -->
+
+</body>
+</html>

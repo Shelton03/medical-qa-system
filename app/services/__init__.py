@@ -1,35 +1,34 @@
-from google import genai
+import httpx
+from openai import AsyncOpenAI
 from app.core.config import settings
 from app.core.logger import logger
 import asyncio
 
-# Initialize Gemini Client
+http_client = httpx.AsyncClient(verify=False)
+
 client = None
-if settings.GEMINI_API_KEY:
+if settings.LLM_API_KEY:
     try:
-        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        client = AsyncOpenAI(
+            base_url=settings.LLM_BASE_URL,
+            api_key=settings.LLM_API_KEY,
+            http_client=http_client
+        )
+        logger.info(f"Connected to LLM: {settings.LLM_MODEL} at {settings.LLM_BASE_URL}")
     except Exception as e:
-        logger.error(f"Failed to initialize Gemini Client: {e}")
+        logger.error(f"Failed to initialize LLM Client: {e}")
 else:
-    logger.warning("GEMINI_API_KEY not set. LLM features will fail.")
+    logger.warning("LLM_API_KEY not set. LLM features will fail.")
 
 async def query_llm(prompt: str) -> str:
     if not client:
         raise ValueError("LLM Client not configured")
     try:
-        # Using synchronous call in a thread to keep it simple, 
-        # or use the aio (async) client if preferred.
-        # For this prototype, we'll use the sync client wrapped in a thread or just the sync client 
-        # if the SDK doesn't have a direct async await on generate_content (it usually does via .aio)
-        
-        # New SDK Async usage:
-        # response = await client.aio.models.generate_content(model='gemini-1.5-flash', contents=prompt)
-        
-        response = await client.aio.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt
+        response = await client.chat.completions.create(
+            model=settings.LLM_MODEL,
+            messages=[{"role": "user", "content": prompt}]
         )
-        return response.text
+        return response.choices[0].message.content
     except Exception as e:
         logger.error(f"LLM Query failed: {e}")
         return ""

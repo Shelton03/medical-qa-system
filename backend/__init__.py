@@ -1,0 +1,1 @@
+"""Mirage — FastAPI Backend Application"""
