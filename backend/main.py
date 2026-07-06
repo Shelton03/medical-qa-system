@@ -18,9 +18,18 @@ from app.auth import router as auth_router
 from app.consent import router as consent_router
 from app.ai import router as ai_router
 from app.patient import router as patient_router
+from app.patient.me_router import router as patient_me_router
 from app.doctor import router as doctor_router
+from app.records import router as records_router
+from app.timeline import router as timeline_router
+from app.transcription import router as transcription_router
+from app.audit import router as audit_router
 from app.notifications.router import router as notifications_router
 from app.notifications.websocket_router import router as notifications_ws_router
+from app.websocket.router import router as ws_router
+from app.middleware.correlation_id import CorrelationIdMiddleware
+from app.middleware.rate_limit import RateLimitMiddleware
+from app.middleware.audit_log import AuditLogMiddleware
 from app.core.exceptions import (
     UnauthorizedException as CoreUnauthorizedException,
     ForbiddenException as CoreForbiddenException,
@@ -45,16 +54,23 @@ async def lifespan(app: FastAPI):
         async with AsyncSessionLocal() as db:
             await seed_demo_data(db)
 
+    from app.websocket.redis_listener import listen_for_websocket_events
     from app.notifications.redis_listener import listen_for_notifications
 
-    listener_task = asyncio.create_task(listen_for_notifications())
+    ws_listener_task = asyncio.create_task(listen_for_websocket_events())
+    notifications_listener_task = asyncio.create_task(listen_for_notifications())
 
     yield
 
     # Shutdown
-    listener_task.cancel()
+    ws_listener_task.cancel()
+    notifications_listener_task.cancel()
     try:
-        await listener_task
+        await ws_listener_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await notifications_listener_task
     except asyncio.CancelledError:
         pass
 
@@ -73,18 +89,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(CorrelationIdMiddleware)
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(AuditLogMiddleware)
 
-app.include_router(auth_router.router, prefix="/api/v1/auth", tags=["Authentication"])
-app.include_router(consent_router.router, prefix="/api/v1/consents", tags=["Consent"])
-app.include_router(ai_router.router, prefix="/api/v1/ai", tags=["AI"])
-app.include_router(patient_router.router, prefix="/api/v1/patients", tags=["Patients"])
-app.include_router(doctor_router.router, prefix="/api/v1/consultations", tags=["Consultations"])
+app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
+app.include_router(consent_router, prefix="/api/v1/consents", tags=["Consent"])
+app.include_router(ai_router, prefix="/api/v1/ai", tags=["AI"])
+app.include_router(patient_me_router, prefix="/api/v1/me/patient", tags=["Patient Me"])
+app.include_router(patient_router, prefix="/api/v1/patients", tags=["Patients"])
+app.include_router(doctor_router, prefix="/api/v1/doctor", tags=["Doctor"])
+app.include_router(records_router, prefix="/api/v1/records", tags=["Records"])
+app.include_router(timeline_router, prefix="/api/v1/timeline", tags=["Timeline"])
+app.include_router(transcription_router, prefix="/api/v1/transcription", tags=["Transcription"])
+app.include_router(audit_router, prefix="/api/v1/audit", tags=["Audit"])
 app.include_router(
     notifications_router,
     prefix="/api/v1/notifications",
     tags=["Notifications"],
 )
 app.include_router(notifications_ws_router)
+app.include_router(ws_router)
 
 
 def _build_error_response(status_code: int, error_code: str, message: str) -> JSONResponse:

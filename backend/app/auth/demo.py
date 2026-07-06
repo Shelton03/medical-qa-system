@@ -22,6 +22,7 @@ DEMO_CREDENTIALS = {
 
 _DEMO_DOCTOR_UUID = uuid.uuid5(uuid.NAMESPACE_OID, "demo-doctor-dr.sarah.mirage@mirage.health")
 _DEMO_PATIENT_UUID = uuid.uuid5(uuid.NAMESPACE_OID, "demo-patient-ZIM-89-4567234")
+_DEMO_ADMIN_UUID = uuid.uuid5(uuid.NAMESPACE_OID, "demo-admin@mirage.health")
 
 
 def authenticate_demo_doctor(email: str, password: str) -> bool:
@@ -50,6 +51,8 @@ def generate_demo_tokens(role: str) -> tuple[str, str, uuid.UUID]:
         synthetic_uuid = _DEMO_DOCTOR_UUID
     elif role == "patient":
         synthetic_uuid = _DEMO_PATIENT_UUID
+    elif role == "admin":
+        synthetic_uuid = _DEMO_ADMIN_UUID
     else:
         raise ValueError("Unsupported demo role")
 
@@ -64,4 +67,5 @@ def is_demo_token(token_payload: dict) -> bool:
     return payload_sub in (
         str(_DEMO_DOCTOR_UUID),
         str(_DEMO_PATIENT_UUID),
+        str(_DEMO_ADMIN_UUID),
     )

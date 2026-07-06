@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import declarative_base
 
 from app.core.config import settings
+from app.db.models import Base  # Unified Base
 
 engine = create_async_engine(settings.database_url, echo=False, future=True)
 AsyncSessionLocal = async_sessionmaker(
@@ -11,7 +11,6 @@ AsyncSessionLocal = async_sessionmaker(
     class_=AsyncSession,
     expire_on_commit=False,
 )
-Base = declarative_base()
 
 
 async def get_db() -> AsyncSession:
@@ -22,8 +21,5 @@ async def get_db() -> AsyncSession:
 
 async def init_db() -> None:
     """Create all tables if they do not exist."""
-    from app import models  # noqa: F401
-    from app.db import models as db_models  # noqa: F401
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        await conn.run_sync(db_models.Base.metadata.create_all)

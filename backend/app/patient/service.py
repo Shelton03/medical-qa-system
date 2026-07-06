@@ -12,7 +12,7 @@ from sqlalchemy.orm import joinedload
 from app.auth.password import hash_password
 from app.core.exceptions import ForbiddenException, NotFoundException
 from app.models import User, Patient
-from app.models.patient_record import MedicalRecord
+from app.db.models import MedicalRecord
 from app.patient import repository
 from app.patient.schemas import (
     PatientCreate,
@@ -24,6 +24,8 @@ from app.patient.schemas import (
     ChronicConditionSummaryResponse,
     MedicationSummaryResponse,
 )
+from app.websocket.events import WSEventType
+from app.websocket.publisher import emit_ws_event
 
 
 async def search_patients(
@@ -110,6 +112,18 @@ async def update_patient_record(
         if not patient:
             raise NotFoundException("Patient not found.", error_code="PATIENT_NOT_FOUND")
         response = _to_response(patient)
+
+    # Emit real-time events after successful commit
+    await emit_ws_event(
+        f"patient:{patient_id}",
+        WSEventType.RECORD_UPDATED,
+        {"patient_id": str(patient_id), "updated_by": str(requesting_user.id)},
+    )
+    await emit_ws_event(
+        f"patient:{patient_id}",
+        WSEventType.TIMELINE_UPDATED,
+        {"patient_id": str(patient_id), "event_type": "PROFILE_UPDATE"},
+    )
 
     return response
 

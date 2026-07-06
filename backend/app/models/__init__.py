@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from app.models.user import User
-from app.models.doctor import Doctor
-from app.models.patient_record import (
+# Re-exports: all legacy code should import from app.db.models directly.
+# This module is kept only for backward compatibility.
+from app.db.models import (
+    User,
+    Doctor,
     Patient,
     MedicalRecord,
     Allergy,

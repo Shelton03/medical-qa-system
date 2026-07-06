@@ -10,14 +10,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class AISessionCreate(BaseModel):
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
     patient_id: UUID | None = None
 
 
 class AISessionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
-    patient_id: UUID
+    patient_id: UUID | None = None
     doctor_id: UUID | None = None
     consultation_id: UUID | None = None
     provider_name: str | None = None
@@ -40,7 +40,7 @@ class AIMessageResponse(BaseModel):
 class AISessionWithMessagesResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
-    patient_id: UUID
+    patient_id: UUID | None = None
     doctor_id: UUID | None = None
     consultation_id: UUID | None = None
     provider_name: str | None = None
@@ -52,5 +52,5 @@ class AISessionWithMessagesResponse(BaseModel):
 
 
 class AIMessageCreate(BaseModel):
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
     content: str = Field(..., min_length=1)

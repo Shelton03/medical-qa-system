@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.models import Patient, User
-from app.models.patient_record import Allergy, ChronicCondition, MedicalRecord, Medication
+from app.db.models import Allergy, ChronicCondition, MedicalRecord, Medication
 from app.patient.schemas import PatientCreate, PatientUpdate
 
 
@@ -150,7 +150,6 @@ async def get_patient_records(
         select(MedicalRecord)
         .options(selectinload(MedicalRecord.allergies))
         .options(selectinload(MedicalRecord.chronic_conditions))
-        .options(selectinload(MedicalRecord.medications))
         .where(MedicalRecord.patient_id == patient_id)
     )
     return result.scalar_one_or_none()
@@ -160,7 +159,9 @@ async def get_patient_full_profile(
     db: AsyncSession,
     patient_id: uuid.UUID,
 ) -> Patient | None:
-    """Fetch a patient with eagerly loaded medical_record, allergies, conditions, medications."""
+    """Fetch a patient with eagerly loaded medical_record, allergies, conditions, visits, medications."""
+    from app.db.models import Visit, Doctor, Facility
+
     result = await db.execute(
         select(Patient)
         .options(joinedload(Patient.user))
@@ -171,7 +172,13 @@ async def get_patient_full_profile(
             selectinload(Patient.medical_record).selectinload(MedicalRecord.chronic_conditions)
         )
         .options(
-            selectinload(Patient.medical_record).selectinload(MedicalRecord.medications)
+            selectinload(Patient.medical_record).selectinload(MedicalRecord.visits).selectinload(Visit.medications)
+        )
+        .options(
+            selectinload(Patient.medical_record).selectinload(MedicalRecord.visits).selectinload(Visit.doctor).selectinload(Doctor.user)
+        )
+        .options(
+            selectinload(Patient.medical_record).selectinload(MedicalRecord.visits).selectinload(Visit.facility)
         )
         .where(Patient.id == patient_id)
     )

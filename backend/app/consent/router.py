@@ -58,6 +58,7 @@ async def create_consent(
         shared_data=body.shared_data,
         expiry_hours=body.expiry_hours,
     )
+    await db.commit()
     return Envelope.ok(response)
 
 
@@ -129,6 +130,7 @@ async def approve_consent(
 ) -> Envelope[ConsentRequestResponse]:
     patient_id = await _resolve_patient_id(db, current_patient.id)
     response = await service.approve_consent(db, consent_id, patient_id)
+    await db.commit()
     return Envelope.ok(response)
 
 
@@ -145,6 +147,7 @@ async def decline_consent(
 ) -> Envelope[ConsentRequestResponse]:
     patient_id = await _resolve_patient_id(db, current_patient.id)
     response = await service.decline_consent(db, consent_id, patient_id)
+    await db.commit()
     return Envelope.ok(response)
 
 
@@ -161,4 +164,5 @@ async def revoke_consent(
 ) -> Envelope[ConsentRequestResponse]:
     patient_id = await _resolve_patient_id(db, current_patient.id)
     response = await service.revoke_consent(db, consent_id, patient_id)
+    await db.commit()
     return Envelope.ok(response)

@@ -1,17 +1,11 @@
-import React from 'react';
-import { Bell } from 'lucide-react';
+import React from "react";
+import { Bell } from "lucide-react";
+import { PatientBottomNav } from "@/components/patient/BottomNav";
 
 interface PatientLayoutProps {
   children: React.ReactNode;
 }
 
-/**
- * Patient Application Layout
- *
- * Minimal mobile layout with no sidebar.
- * Header contains Mirage branding and a notification bell placeholder.
- * Patient pages assume a fixed viewport when rendered inside PhoneFrame.
- */
 export default function PatientLayout({ children }: PatientLayoutProps): React.ReactElement {
   return (
     <div className="flex flex-col h-full bg-stellarWhite">
@@ -33,9 +27,12 @@ export default function PatientLayout({ children }: PatientLayoutProps): React.R
       </header>
 
       {/* Content */}
-      <main className="flex-1 overflow-y-auto scrollbar-hide">
+      <main className="flex-1 overflow-y-auto scrollbar-hide pb-16">
         {children}
       </main>
+
+      {/* Bottom Navigation */}
+      <PatientBottomNav />
     </div>
   );
 }

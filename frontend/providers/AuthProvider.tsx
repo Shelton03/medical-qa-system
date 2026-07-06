@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { authApi } from "@/lib/api";
+import { authApi, clearStoredTokens } from "@/lib/api";
 import type { UserProfile, UserRole } from "@/lib/types";
 import { AuthContext } from "@/hooks/useAuth";
 
@@ -32,12 +32,6 @@ function storeTokens(access: string, refresh: string): void {
   localStorage.setItem(STORAGE_KEYS.refreshToken, refresh);
 }
 
-function clearTokens(): void {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(STORAGE_KEYS.accessToken);
-  localStorage.removeItem(STORAGE_KEYS.refreshToken);
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }): React.ReactElement {
   const router = useRouter();
   const [state, setState] = useState<AuthState>({
@@ -57,7 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
         role: profile.role,
       });
     } catch {
-      clearTokens();
+      clearStoredTokens();
       setState({
         user: null,
         isLoading: false,
@@ -73,8 +67,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       setState((prev) => ({ ...prev, isLoading: false }));
       return;
     }
-
-    // Optimistically assume valid; getMe will clear if not
     try {
       const profile = await authApi.getMe();
       setState({
@@ -87,14 +79,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       if (refresh) {
         try {
           const refreshed = await authApi.refreshToken(refresh);
-          storeTokens(refreshed.accessToken, refreshed.refreshToken);
+          storeTokens(refreshed.access_token, refresh);
           await hydrateUser();
           return;
         } catch {
-          // Refresh failed — fallthrough to clear
+          // fallthrough
         }
       }
-      clearTokens();
+      clearStoredTokens();
       setState({
         user: null,
         isLoading: false,
@@ -113,12 +105,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       setState((prev) => ({ ...prev, isLoading: true }));
       try {
         const response = await authApi.loginDoctor(email, password);
-        storeTokens(response.accessToken, response.refreshToken);
+        storeTokens(response.access_token, response.refresh_token);
+        const profile = await authApi.getMe();
         setState({
-          user: response.user,
+          user: profile,
           isLoading: false,
           isAuthenticated: true,
-          role: response.user.role,
+          role: profile.role,
         });
         router.push("/doctor/dashboard");
       } catch (error) {
@@ -130,16 +123,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
   );
 
   const loginPatient = useCallback(
-    async (nationalId: string, pin: string) => {
+    async (national_id: string, pin: string) => {
       setState((prev) => ({ ...prev, isLoading: true }));
       try {
-        const response = await authApi.loginPatient(nationalId, pin);
-        storeTokens(response.accessToken, response.refreshToken);
+        const response = await authApi.loginPatient(national_id, pin);
+        storeTokens(response.access_token, response.refresh_token);
+        const profile = await authApi.getMe();
         setState({
-          user: response.user,
+          user: profile,
           isLoading: false,
           isAuthenticated: true,
-          role: response.user.role,
+          role: profile.role,
         });
         router.push("/patient/consent");
       } catch (error) {
@@ -155,9 +149,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
     try {
       await authApi.logout();
     } catch {
-      // Ignore logout errors — always clear locally
+      // Ignore logout errors
     } finally {
-      clearTokens();
+      clearStoredTokens();
       setState({
         user: null,
         isLoading: false,

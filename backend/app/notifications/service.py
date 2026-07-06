@@ -19,7 +19,9 @@ from app.notifications.repository import (
     mark_notification_read,
 )
 from app.shared.exceptions import ForbiddenException, NotFoundException
-from app.shared.redis_client import get_redis
+from app.core.redis import get_redis
+from app.websocket.events import WSEventType
+from app.websocket.publisher import emit_ws_event
 
 
 async def send_notification(
@@ -54,6 +56,17 @@ async def send_notification(
         },
     }
     await redis.publish(channel, json.dumps(message))
+    # Emit generic WebSocket event for dashboard / channel subscribers
+    await emit_ws_event(
+        f"user:{user_id}",
+        WSEventType.NOTIFICATION_CREATED,
+        {
+            "id": str(notification.id),
+            "type": notification.type,
+            "title": notification.title,
+            "recipient_id": str(user_id),
+        },
+    )
 
 
 async def get_user_notifications(

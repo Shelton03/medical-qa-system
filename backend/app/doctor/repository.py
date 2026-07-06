@@ -18,7 +18,7 @@ from app.db.models import (
     MedicalRecord,
     Visit,
 )
-from app.models.patient_record import Medication as LegacyMedication
+from app.db.models import Medication as LegacyMedication
 from app.doctor.schemas import (
     DiagnosisCreate,
     MedicationCreate,
@@ -76,7 +76,7 @@ async def list_visits_for_doctor(
     status: str | None = None,
 ) -> tuple[list[Visit], int]:
     """Return paginated visits for a doctor."""
-    stmt = select(Visit).where(Visit.doctor_id == doctor_id)
+    stmt = select(Visit).options(selectinload(Visit.medical_record)).where(Visit.doctor_id == doctor_id)
     count_stmt = (
         select(func.count()).select_from(Visit).where(Visit.doctor_id == doctor_id)
     )
@@ -104,7 +104,7 @@ async def list_visits_for_patient(
     if not medical_record_id:
         return [], 0
 
-    stmt = select(Visit).where(Visit.medical_record_id == medical_record_id)
+    stmt = select(Visit).options(selectinload(Visit.medical_record)).where(Visit.medical_record_id == medical_record_id)
     count_stmt = (
         select(func.count())
         .select_from(Visit)

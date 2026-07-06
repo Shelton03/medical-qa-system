@@ -21,6 +21,8 @@ from app.consent.repository import (
 )
 from app.consent.schemas import ConsentRequestCreate, ConsentRequestResponse
 from app.notifications.service import broadcast_consent_notification
+from app.websocket.events import WSEventType
+from app.websocket.publisher import emit_ws_event
 
 
 async def _create_audit_log(
@@ -106,6 +108,16 @@ async def request_consent(
         metadata={"patient_id": str(patient_id), "purpose": purpose},
     )
     await broadcast_consent_notification(db, consent, "CONSENT_REQUESTED")
+    await emit_ws_event(
+        f"patient:{patient_id}",
+        WSEventType.CONSENT_REQUESTED,
+        {
+            "consent_id": str(consent.id),
+            "doctor_id": str(doctor_id),
+            "patient_id": str(patient_id),
+            "status": consent.status,
+        },
+    )
     return _to_response(consent, doctor_name)
 
 
@@ -144,6 +156,16 @@ async def approve_consent(
         metadata={"doctor_id": str(updated.doctor_id)},
     )
     await broadcast_consent_notification(db, updated, "CONSENT_APPROVED")
+    await emit_ws_event(
+        f"doctor:{updated.doctor_id}",
+        WSEventType.CONSENT_APPROVED,
+        {
+            "consent_id": str(updated.id),
+            "patient_id": str(updated.patient_id),
+            "doctor_id": str(updated.doctor_id),
+            "status": updated.status,
+        },
+    )
     return _to_response(updated, doctor_name)
 
 
@@ -180,6 +202,16 @@ async def decline_consent(
         metadata={"doctor_id": str(updated.doctor_id)},
     )
     await broadcast_consent_notification(db, updated, "CONSENT_DECLINED")
+    await emit_ws_event(
+        f"doctor:{updated.doctor_id}",
+        WSEventType.CONSENT_DECLINED,
+        {
+            "consent_id": str(updated.id),
+            "patient_id": str(updated.patient_id),
+            "doctor_id": str(updated.doctor_id),
+            "status": updated.status,
+        },
+    )
     return _to_response(updated, doctor_name)
 
 
@@ -210,6 +242,16 @@ async def revoke_consent(
         metadata={"doctor_id": str(updated.doctor_id)},
     )
     await broadcast_consent_notification(db, updated, "CONSENT_REVOKED")
+    await emit_ws_event(
+        f"doctor:{updated.doctor_id}",
+        WSEventType.CONSENT_REVOKED,
+        {
+            "consent_id": str(updated.id),
+            "patient_id": str(updated.patient_id),
+            "doctor_id": str(updated.doctor_id),
+            "status": updated.status,
+        },
+    )
     return _to_response(updated, doctor_name)
 
 

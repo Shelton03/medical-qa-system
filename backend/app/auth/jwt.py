@@ -12,7 +12,7 @@ _SECRET_KEY = settings.jwt_secret
 _REFRESH_SECRET_KEY = settings.refresh_secret
 _ALGORITHM = "HS256"
 DEFAULT_ACCESS_DELTA = timedelta(minutes=settings.access_token_expire_minutes)
-DEFAULT_REFRESH_DELTA = timedelta(seconds=settings.refresh_expiration)
+DEFAULT_REFRESH_DELTA = timedelta(seconds=settings.refresh_expiration_seconds)
 
 
 def create_access_token(

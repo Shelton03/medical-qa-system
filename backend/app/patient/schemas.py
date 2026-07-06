@@ -96,7 +96,7 @@ class ChronicConditionSummaryResponse(BaseModel):
 class MedicationSummaryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
-    medical_record_id: UUID
+    medical_record_id: UUID | None = None
     name: str
     dosage: str | None = None
     frequency: str | None = None

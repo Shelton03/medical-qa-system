@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { WebSocketContext } from "@/hooks/useWebSocket";
 import { notificationsApi } from "@/lib/api";
-import type { ConsentStatus, Notification, WsEvent } from "@/lib/types";
+import type { ConsentStatus, NotificationResponse, WsEvent } from "@/lib/types";
 
 const WS_URL = "ws://localhost:8000/ws/notifications";
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000];
@@ -16,7 +16,7 @@ function getStoredAccessToken(): string | null {
 
 export function WebSocketProvider({ children }: { children: React.ReactNode }): React.ReactElement {
   const [isConnected, setIsConnected] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<NotificationResponse[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectAttemptRef = useRef(0);
@@ -26,10 +26,10 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
 
   // Fetch initial notifications
   useEffect(() => {
-    notificationsApi.listNotifications({ unread: false, pageSize: 50 }).then((data) => {
+    notificationsApi.listNotifications({ unread_only: false, limit: 50 }).then((data) => {
       if (isMountedRef.current) {
-        setNotifications(data);
-        setUnreadCount(data.filter((n) => !n.read).length);
+        setNotifications(data.items);
+        setUnreadCount(data.items.filter((n) => !n.is_read).length);
       }
     }).catch(() => {
       // Silently fail — we'll retry when socket connects
@@ -66,13 +66,13 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
               const payload = msg.payload as { consentId: string; doctorId: string; patientId: string };
               const existing = prev.find((n) => n.id === payload.consentId);
               if (existing) return prev;
-              const incoming: Notification = {
+              const incoming: NotificationResponse = {
                 id: payload.consentId,
                 type: "CONSENT",
                 title: "New Consent Request",
                 body: "A doctor has requested access to your medical record.",
-                read: false,
-                createdAt: new Date().toISOString(),
+                is_read: false,
+                created_at: new Date().toISOString(),
               };
               return [incoming, ...prev];
             });
@@ -81,20 +81,20 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
             break;
 
           case "CONSENT_APPROVED":
-          case "CONSENT_DENIED":
+          case "CONSENT_DECLINED":
           case "CONSENT_REVOKED": {
             const payloadConsent = msg.payload as { consentId: string };
             const normalizedStatus: ConsentStatus =
               msg.type === "CONSENT_APPROVED"
-                ? "APPROVED"
-                : msg.type === "CONSENT_DENIED"
-                ? "DENIED"
-                : "REVOKED";
+                ? "approved"
+                : msg.type === "CONSENT_DECLINED"
+                ? "declined"
+                : "revoked";
             // Update local consent-related notifications if applicable
             setNotifications((prev) =>
               prev.map((n) =>
                 n.id === payloadConsent.consentId
-                  ? { ...n, read: true }
+                  ? { ...n, is_read: true }
                   : n
               )
             );
@@ -104,7 +104,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
 
           case "NOTIFICATION":
           case "NOTIFICATION_CREATED": {
-            const payloadNote = msg.payload as unknown as Notification;
+            const payloadNote = msg.payload as unknown as NotificationResponse;
             setNotifications((prev) => {
               const existing = prev.find((n) => n.id === payloadNote.id);
               if (existing) return prev;
@@ -193,7 +193,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
 
   const markRead = useCallback(async (notificationId: string) => {
     setNotifications((prev) =>
-      prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
+      prev.map((n) => (n.id === notificationId ? { ...n, is_read: true } : n))
     );
     setUnreadCount((c) => Math.max(0, c - 1));
     try {
@@ -204,7 +204,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
   }, []);
 
   const markAllRead = useCallback(async () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
     setUnreadCount(0);
     try {
       await notificationsApi.markAllRead();

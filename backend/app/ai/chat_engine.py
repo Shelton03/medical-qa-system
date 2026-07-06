@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.provider import AIContext, AIMessage, AIProvider
 from app.db.models import AISession as AISessionModel, AIMessage as AIMessageModel, ConsentRequest
+from app.websocket.events import WSEventType
+from app.websocket.publisher import emit_ws_event
 
 
 class ChatEngine:
@@ -155,6 +157,17 @@ class ChatEngine:
         assistant_text = await provider.generate_response(history, context)
 
         await self.add_message(db, session_id, "assistant", assistant_text)
+
+        # Emit real-time AI response event
+        await emit_ws_event(
+            f"doctor:{session.doctor_id}",
+            WSEventType.AI_RESPONSE_READY,
+            {
+                "session_id": str(session_id),
+                "patient_id": str(session.patient_id) if session.patient_id else None,
+                "response_preview": assistant_text[:200],
+            },
+        )
         return assistant_text
 
     async def generate_ai_stream(
@@ -185,3 +198,14 @@ class ChatEngine:
 
         assistant_text = "".join(full_chunks)
         await self.add_message(db, session_id, "assistant", assistant_text)
+
+        # Emit real-time AI response event
+        await emit_ws_event(
+            f"doctor:{session.doctor_id}",
+            WSEventType.AI_RESPONSE_READY,
+            {
+                "session_id": str(session_id),
+                "patient_id": str(session.patient_id) if session.patient_id else None,
+                "response_preview": assistant_text[:200],
+            },
+        )

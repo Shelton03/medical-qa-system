@@ -43,7 +43,7 @@ async def login_doctor(
         return TokenPair(
             access_token=access,
             refresh_token=refresh,
-            expires_in=settings.jwt_expiration,
+            expires_in=settings.jwt_expiration_seconds,
             role=user.role,
             demo_mode=False,
         )
@@ -53,7 +53,7 @@ async def login_doctor(
         return TokenPair(
             access_token=access,
             refresh_token=refresh,
-            expires_in=settings.jwt_expiration,
+            expires_in=settings.jwt_expiration_seconds,
             role="doctor",
             demo_mode=True,
         )
@@ -67,7 +67,7 @@ async def login_patient(
     db: AsyncSession,
 ) -> TokenPair:
     """Authenticate a patient by national_id/pin, falling back to demo credentials."""
-    from app.models.patient_record import Patient
+    from app.db.models import Patient
 
     stmt = (
         select(User)
@@ -83,7 +83,7 @@ async def login_patient(
         return TokenPair(
             access_token=access,
             refresh_token=refresh,
-            expires_in=settings.jwt_expiration,
+            expires_in=settings.jwt_expiration_seconds,
             role=user.role,
             demo_mode=False,
         )
@@ -93,7 +93,7 @@ async def login_patient(
         return TokenPair(
             access_token=access,
             refresh_token=refresh,
-            expires_in=settings.jwt_expiration,
+            expires_in=settings.jwt_expiration_seconds,
             role="patient",
             demo_mode=True,
         )
@@ -113,7 +113,7 @@ async def refresh_access_token(refresh_token: str) -> str:
 
     subject = uuid.UUID(subject_str)
 
-    redis = get_redis()
+    redis = await get_redis()
     jti = payload.get("jti")
     if jti and await redis.get(f"blacklist:{jti}"):
         raise UnauthorizedException("Refresh token has been revoked.")
@@ -129,6 +129,6 @@ async def refresh_access_token(refresh_token: str) -> str:
 
 async def logout(token_jti: str) -> None:
     """Add a token JTI to the Redis blacklist with TTL matching token expiry."""
-    max_ttl = max(settings.jwt_expiration, settings.refresh_expiration)
-    redis = get_redis()
+    max_ttl = max(settings.jwt_expiration_seconds, settings.refresh_expiration_seconds)
+    redis = await get_redis()
     await redis.setex(f"blacklist:{token_jti}", max_ttl, "1")

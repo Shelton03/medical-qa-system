@@ -32,11 +32,11 @@ router = APIRouter()
     description="Search patients by name, national ID, or phone. Doctor and admin only.",
 )
 async def list_patients(
-    q: Annotated[str | None, Query(None, description="Search query")] = None,
-    limit: Annotated[int, Query(20, ge=1, le=100)] = 20,
-    offset: Annotated[int, Query(0, ge=0)] = 0,
+    q: Annotated[str | None, Query(description="Search query")] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
     db: AsyncSession = Depends(get_db),
-    current_user: User = get_current_doctor,
+    current_user: User = Depends(get_current_doctor),
 ) -> Envelope[list[PatientResponse]]:
     query = q or ""
     patients, _total = await service.search_patients(db, query, limit, offset, current_user)
@@ -68,7 +68,7 @@ async def get_patient(
 async def register_patient(
     data: PatientCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = get_current_doctor,
+    current_user: User = Depends(get_current_doctor),
 ) -> Envelope[PatientResponse]:
     patient = await service.register_patient(db, data)
     return Envelope.ok(patient)
@@ -84,7 +84,7 @@ async def update_patient(
     patient_id: uuid.UUID,
     data: PatientUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = get_current_doctor,
+    current_user: User = Depends(get_current_doctor),
 ) -> Envelope[PatientResponse]:
     patient = await service.update_patient_record(db, patient_id, data, current_user)
     return Envelope.ok(patient)

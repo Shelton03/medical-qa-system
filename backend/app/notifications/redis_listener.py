@@ -8,7 +8,7 @@ import logging
 import uuid
 
 from app.notifications.websocket_manager import manager
-from app.shared.redis_client import get_redis
+from app.core.redis import get_redis
 
 logger = logging.getLogger(__name__)
 

@@ -8,6 +8,8 @@ import {
   Stethoscope,
   Bell,
   Settings,
+  Shield,
+  Sparkles,
 } from 'lucide-react';
 
 const navItems = [
@@ -15,6 +17,7 @@ const navItems = [
   { label: 'Patients', href: '/doctor/patients', icon: Users },
   { label: 'Consents', href: '/doctor/consents', icon: FileCheck },
   { label: 'Consultations', href: '/doctor/consultations', icon: Stethoscope },
+  { label: 'AI Consultation', href: '/doctor/ai-consultation', icon: Sparkles },
 ];
 
 interface DoctorLayoutProps {
@@ -51,14 +54,9 @@ export default function DoctorLayout({ children }: DoctorLayoutProps): React.Rea
 
         {/* Bottom actions */}
         <div className="px-3 py-4 border-t border-border space-y-1">
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-card text-sm font-medium text-clinicalGrey hover:bg-secondary transition-colors">
-            <Bell className="w-5 h-5" />
-            Notifications
-          </button>
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-card text-sm font-medium text-clinicalGrey hover:bg-secondary transition-colors">
-            <Settings className="w-5 h-5" />
-            Settings
-          </button>
+          <NavLink href="/doctor/notifications" icon={Bell} label="Notifications" />
+          <NavLink href="/doctor/settings" icon={Settings} label="Settings" />
+          <NavLink href="/doctor/access-history" icon={Shield} label="Access History" />
         </div>
       </aside>
 
@@ -68,13 +66,14 @@ export default function DoctorLayout({ children }: DoctorLayoutProps): React.Rea
         <header className="h-16 bg-white border-b border-border flex items-center justify-between px-8 shrink-0">
           <h1 className="font-semibold text-mirageBlack">Doctor Portal</h1>
           <div className="flex items-center gap-4">
-            <button
+            <Link
+              href="/doctor/notifications"
               aria-label="Notifications"
               className="relative p-2 rounded-full hover:bg-secondary transition-colors touch-target"
             >
               <Bell className="w-5 h-5 text-clinicalGrey" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-alertOrange rounded-full" />
-            </button>
+            </Link>
             <div className="w-9 h-9 rounded-full bg-mirageBlack-100 flex items-center justify-center">
               <span className="text-xs font-bold text-mirageBlack">DR</span>
             </div>

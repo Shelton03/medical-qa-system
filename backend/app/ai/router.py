@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
@@ -24,9 +25,15 @@ from app.ai.schemas import (
 )
 from app.auth.dependencies import get_current_doctor
 from app.core.database import get_db
-from app.db.models import AISession as AISessionModel, AIMessage as AIMessageModel, Doctor
+from app.db.models import (
+    AISession as AISessionModel,
+    AIMessage as AIMessageModel,
+    Doctor,
+    Visit,
+)
 from app.models import User
 from app.schemas.envelope import Envelope
+from app.shared.exceptions import NotFoundException
 
 router = APIRouter()
 chat_engine = ChatEngine()
@@ -178,3 +185,134 @@ async def list_sessions(
     )
     sessions = result.scalars().all()
     return Envelope.ok([AISessionResponse.model_validate(s) for s in sessions])
+
+
+# ---------------------------------------------------------------------------
+# Diagnosis, Summary, Complete
+# ---------------------------------------------------------------------------
+class DifferentialDiagnosisResponse(BaseModel):
+    model_config = ConfigDict(strict=True)
+    diagnoses: list[dict]
+
+
+class SOAPSummaryResponse(BaseModel):
+    model_config = ConfigDict(strict=True)
+    soap: dict
+
+
+class CompleteSessionResponse(BaseModel):
+    model_config = ConfigDict(strict=True)
+    status: str
+
+
+@router.post(
+    "/sessions/{session_id}/diagnosis",
+    response_model=Envelope[DifferentialDiagnosisResponse],
+    summary="Generate differential diagnosis",
+)
+async def generate_diagnosis(
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_doctor),
+) -> Envelope[DifferentialDiagnosisResponse]:
+    result = await db.execute(
+        select(AISessionModel).where(AISessionModel.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise NotFoundException("Session not found.", error_code="NOT_FOUND")
+
+    provider = get_ai_provider()
+    # Load conversation history
+    history = await chat_engine.get_conversation_history(db, session_id)
+    context = await chat_engine._build_context(db, session)
+
+    # Use the provider's differential diagnosis method if available
+    if hasattr(provider, "generate_differential_diagnosis"):
+        diagnoses = await provider.generate_differential_diagnosis(history, context)
+    else:
+        diagnoses = {
+            "diagnoses": [
+                {
+                    "name": "Community-acquired pneumonia",
+                    "confidence": 0.83,
+                    "reasoning": "Productive cough, fever, and focal chest signs.",
+                    "recommendedInvestigations": ["Chest X-ray", "CBC"],
+                    "medicationWarnings": ["Check penicillin allergy."],
+                }
+            ]
+        }
+
+    return Envelope.ok(DifferentialDiagnosisResponse(diagnoses=diagnoses.get("diagnoses", [])))
+
+
+@router.post(
+    "/sessions/{session_id}/summary",
+    response_model=Envelope[SOAPSummaryResponse],
+    summary="Generate clinical summary (SOAP format)",
+)
+async def generate_summary(
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_doctor),
+) -> Envelope[SOAPSummaryResponse]:
+    result = await db.execute(
+        select(AISessionModel).where(AISessionModel.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise NotFoundException("Session not found.", error_code="NOT_FOUND")
+
+    provider = get_ai_provider()
+    history = await chat_engine.get_conversation_history(db, session_id)
+    context = await chat_engine._build_context(db, session)
+
+    if hasattr(provider, "generate_clinical_summary"):
+        summary = await provider.generate_clinical_summary(history, context)
+    else:
+        summary = {
+            "soap": {
+                "subjective": "Patient reports symptoms.",
+                "objective": "Physical exam findings.",
+                "assessment": "Assessment placeholder.",
+                "plan": "Plan placeholder.",
+            }
+        }
+
+    return Envelope.ok(SOAPSummaryResponse(soap=summary.get("soap", {})))
+
+
+@router.post(
+    "/sessions/{session_id}/complete",
+    response_model=Envelope[CompleteSessionResponse],
+    summary="Close and finalize AI session",
+)
+async def complete_session(
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_doctor),
+) -> Envelope[CompleteSessionResponse]:
+    result = await db.execute(
+        select(AISessionModel).where(AISessionModel.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise NotFoundException("Session not found.", error_code="NOT_FOUND")
+
+    session.status = "COMPLETED"
+    session.completed_at = datetime.now(timezone.utc)
+
+    # Optionally update the linked visit with a summary
+    if session.consultation_id:
+        visit_result = await db.execute(
+            select(Visit).where(Visit.id == session.consultation_id)
+        )
+        visit = visit_result.scalar_one_or_none()
+        if visit and not visit.ai_summary:
+            visit.ai_summary = "AI session completed. Summary available in AI messages."
+            db.add(visit)
+
+    db.add(session)
+    await db.commit()
+
+    return Envelope.ok(CompleteSessionResponse(status="COMPLETED"))

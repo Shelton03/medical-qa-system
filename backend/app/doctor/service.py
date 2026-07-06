@@ -18,8 +18,8 @@ from app.db.models import (
     Patient,
     Visit,
 )
-from app.models.patient_record import Medication as LegacyMedication
-from app.models.user import User
+from app.db.models import Medication as LegacyMedication
+from app.db.models import User
 from app.consent.service import check_record_access
 from app.doctor import repository
 from app.doctor.schemas import (
@@ -34,6 +34,8 @@ from app.doctor.schemas import (
     VisitWithDetailsResponse,
 )
 from app.shared.exceptions import ConflictException, ForbiddenException, NotFoundException
+from app.websocket.events import WSEventType
+from app.websocket.publisher import emit_ws_event
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +101,16 @@ async def start_consultation(
                 "chief_complaint": data.chief_complaint,
             },
         )
+    await emit_ws_event(
+        f"patient:{data.patient_id}",
+        WSEventType.CONSULTATION_STARTED,
+        {
+            "visit_id": str(visit.id),
+            "patient_id": str(data.patient_id),
+            "doctor_id": str(doctor_id),
+            "status": visit.status,
+        },
+    )
     return visit
 
 
@@ -194,6 +206,17 @@ async def complete_consultation(
             action="CONSULTATION_COMPLETED",
             resource_type="Visit",
             resource_id=visit.id,
+        )
+    if visit.medical_record:
+        await emit_ws_event(
+            f"patient:{visit.medical_record.patient_id}",
+            WSEventType.CONSULTATION_COMPLETED,
+            {
+                "visit_id": str(visit.id),
+                "patient_id": str(visit.medical_record.patient_id),
+                "doctor_id": str(doctor_id),
+                "status": visit.status,
+            },
         )
     return visit
 

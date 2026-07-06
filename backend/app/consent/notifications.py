@@ -9,7 +9,7 @@ from app.core.redis import get_redis
 
 async def notify_patient_new_consent(patient_id: uuid.UUID, consent_data: dict) -> None:
     """Push a real-time notification to the patient via Redis Pub/Sub and list."""
-    redis = get_redis()
+    redis = await get_redis()
     channel = f"patient:{patient_id}:notifications"
     message = {
         "type": "CONSENT_REQUESTED",
@@ -23,7 +23,7 @@ async def notify_patient_new_consent(patient_id: uuid.UUID, consent_data: dict) 
 
 async def notify_doctor_consent_updated(doctor_id: uuid.UUID, consent_data: dict) -> None:
     """Push a real-time notification to the doctor via Redis Pub/Sub and list."""
-    redis = get_redis()
+    redis = await get_redis()
     channel = f"doctor:{doctor_id}:notifications"
     consent_status = consent_data.get("status", "updated")
     event_type = {

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.exceptions import ForbiddenException, UnauthorizedException
 from app.auth.jwt import decode_token
-from app.auth.demo import is_demo_token, _DEMO_DOCTOR_UUID, _DEMO_PATIENT_UUID
+from app.auth.demo import is_demo_token, _DEMO_DOCTOR_UUID, _DEMO_PATIENT_UUID, _DEMO_ADMIN_UUID
 from app.models import User
 from app.schemas.envelope import ErrorDetail
 
@@ -32,6 +32,8 @@ async def get_current_user(
             synthetic_uuid = _DEMO_DOCTOR_UUID
         elif role == "patient":
             synthetic_uuid = _DEMO_PATIENT_UUID
+        elif role == "admin":
+            synthetic_uuid = _DEMO_ADMIN_UUID
         else:
             raise UnauthorizedException("Invalid demo token role.")
         # Build a lightweight synthetic user for demo sessions

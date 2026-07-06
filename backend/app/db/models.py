@@ -264,7 +264,6 @@ class MedicalRecord(Base):
     patient_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("patients.id", onupdate="CASCADE", ondelete="RESTRICT"),
         nullable=False,
-        unique=True,
     )
     primary_physician_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("doctors.id", onupdate="CASCADE", ondelete="RESTRICT"),
@@ -718,9 +717,9 @@ class AISession(Base):
         primary_key=True,
         default=uuid.uuid4,
     )
-    patient_id: Mapped[uuid.UUID] = mapped_column(
+    patient_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("patients.id", onupdate="CASCADE", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
     )
     doctor_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("doctors.id", onupdate="CASCADE", ondelete="RESTRICT"),

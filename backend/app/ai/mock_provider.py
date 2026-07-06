@@ -99,3 +99,80 @@ class MockAIProvider(AIProvider):
             "medical record conditions, allergies, and medications.\n\n"
             f"{_CLINICAL_DISCLAIMER}"
         )
+
+    async def generate_differential_diagnosis(
+        self,
+        conversation_history: list[AIMessage],
+        context: AIContext,
+    ) -> dict:
+        """Return a realistic differential diagnosis structure."""
+        return {
+            "diagnoses": [
+                {
+                    "name": "Community-acquired pneumonia",
+                    "confidence": 0.83,
+                    "reasoning": "Productive cough, fever, and focal chest signs consistent with bacterial pneumonia.",
+                    "recommendedInvestigations": [
+                        "Chest X-ray",
+                        "CBC with differential",
+                        "Sputum culture",
+                        "Blood culture",
+                    ],
+                    "medicationWarnings": [
+                        "Check penicillin allergy before prescribing amoxicillin-clavulanate.",
+                    ],
+                },
+                {
+                    "name": "Acute bronchitis",
+                    "confidence": 0.72,
+                    "reasoning": "Viral prodrome with persistent cough; no focal consolidation signs.",
+                    "recommendedInvestigations": [
+                        "Chest X-ray to rule out pneumonia",
+                    ],
+                    "medicationWarnings": [
+                        "Avoid antibiotics unless bacterial infection confirmed.",
+                    ],
+                },
+                {
+                    "name": "COVID-19",
+                    "confidence": 0.65,
+                    "reasoning": "Fever, cough, and recent exposure risk; compatible symptom timeline.",
+                    "recommendedInvestigations": [
+                        "RT-PCR test",
+                        "Pulse oximetry",
+                    ],
+                    "medicationWarnings": [
+                        "Assess drug interactions with Paxlovid if indicated.",
+                    ],
+                },
+            ]
+        }
+
+    async def generate_clinical_summary(
+        self,
+        conversation_history: list[AIMessage],
+        context: AIContext,
+    ) -> dict:
+        """Return a realistic SOAP note structure."""
+        return {
+            "soap": {
+                "subjective": (
+                    "Patient reports productive cough for 3 days, associated with fever and pleuritic chest pain. "
+                    "No hemoptysis. Recent URI symptoms. No known sick contacts."
+                ),
+                "objective": (
+                    "Temp 38.5C, HR 96, RR 20, BP 122/78, SpO2 94% on room air. "
+                    "Right lower lobe crackles on auscultation. No wheeze."
+                ),
+                "assessment": (
+                    "Likely community-acquired pneumonia (RLL) vs acute bronchitis. "
+                    "Oxygen saturation mildly reduced. No signs of respiratory failure."
+                ),
+                "plan": (
+                    "1. Chest X-ray and labs (CBC, sputum culture).\n"
+                    "2. Empiric antibiotics if consolidation confirmed.\n"
+                    "3. Hydration, antipyretics, and reassess in 48 hours.\n"
+                    "4. Return if worsening dyspnea or SpO2 < 92%."
+                ),
+            }
+        }

@@ -12,13 +12,13 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.db.models import Base
-from app.shared.settings import settings
+from app.core.config import settings
 
 # Alembic Config object
 config = context.config
 
 # Set asyncpg URL from application settings
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+config.set_main_option("sqlalchemy.url", settings.database_url)
 
 # Interpret the config file for Python logging
 if config.config_file_name is not None:

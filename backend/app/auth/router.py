@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -38,6 +38,55 @@ class RefreshResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
+
+
+class DemoLoginRequest(BaseModel):
+    model_config = ConfigDict(strict=True)
+    role: str = Field(..., pattern="^(patient|doctor|admin)$")
+
+
+class DemoLoginResponse(BaseModel):
+    model_config = ConfigDict(strict=True)
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    role: str
+    demo_mode: bool = True
+    user: UserResponse
+
+
+@router.post(
+    "/demo-login",
+    response_model=Envelope[DemoLoginResponse],
+    summary="Demo login",
+    description="Authenticate instantly using a predefined demonstration account.",
+)
+async def demo_login(
+    body: DemoLoginRequest,
+) -> Envelope[DemoLoginResponse]:
+    from app.auth.demo import generate_demo_tokens
+    from app.core.config import settings
+
+    access, refresh, synthetic_uuid = generate_demo_tokens(body.role)
+    user = UserResponse(
+        id=str(synthetic_uuid),
+        role=body.role,
+        first_name="Demo",
+        last_name=body.role.capitalize(),
+        email=f"demo-{body.role}@mirage.health",
+    )
+    return Envelope.ok(
+        DemoLoginResponse(
+            access_token=access,
+            refresh_token=refresh,
+            token_type="bearer",
+            expires_in=settings.jwt_expiration_seconds,
+            role=body.role,
+            demo_mode=True,
+            user=user,
+        )
+    )
 
 
 @router.post(
@@ -81,7 +130,7 @@ async def refresh(body: RefreshRequest) -> Envelope[RefreshResponse]:
         RefreshResponse(
             access_token=new_access,
             token_type="bearer",
-            expires_in=settings.jwt_expiration,
+            expires_in=settings.jwt_expiration_seconds,
         )
     )
 

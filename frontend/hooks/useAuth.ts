@@ -10,7 +10,7 @@ export interface AuthContextValue {
   role: UserRole | null;
   loginDoctor: (email: string, password: string) => Promise<void>;
   loginPatient: (nationalId: string, pin: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 export const AuthContext = React.createContext<AuthContextValue>({
@@ -20,7 +20,7 @@ export const AuthContext = React.createContext<AuthContextValue>({
   role: null,
   loginDoctor: async () => {},
   loginPatient: async () => {},
-  logout: () => {},
+  logout: async () => {},
 });
 
 export function useAuth(): AuthContextValue {
