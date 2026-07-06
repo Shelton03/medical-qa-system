@@ -9,6 +9,8 @@ from typing import Any
 
 from fastapi import WebSocket
 
+from starlette.websockets import WebSocketState
+
 
 class ConnectionManager:
     """Singleton managing active WebSocket connections with channel subscriptions."""
@@ -29,8 +31,9 @@ class ConnectionManager:
         user_id: uuid.UUID,
         channels: list[str] | None = None,
     ) -> None:
-        """Accept connection and optionally pre-subscribe the user to channels."""
-        await websocket.accept()
+        """Accept connection (if still pending) and optionally pre-subscribe."""
+        if websocket.client_state == WebSocketState.CONNECTING:
+            await websocket.accept()
         async with self._lock:
             existing = self._connections.get(user_id)
             if existing:

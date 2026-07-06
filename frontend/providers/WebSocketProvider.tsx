@@ -2,19 +2,94 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { WebSocketContext } from "@/hooks/useWebSocket";
-import { notificationsApi } from "@/lib/api";
-import type { ConsentStatus, NotificationResponse, WsEvent } from "@/lib/types";
+import { notificationsApi, authApi } from "@/lib/api";
+import type { NotificationResponse, WsEvent } from "@/lib/types";
 
-// API Contract §WebSocket Contract — canonical endpoint is /ws
+// ------------------------------------------------------------------
+// Configuration
+// ------------------------------------------------------------------
 const WS_URL = "ws://localhost:8000/ws";
-const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000];
+const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000, 60000];
 const HEARTBEAT_INTERVAL = 30000;
+const AUTH_TIMEOUT_MS = 5000;
 
+// ------------------------------------------------------------------
+// Token helpers
+// ------------------------------------------------------------------
 function getStoredAccessToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("mirage_access_token");
 }
 
+function getStoredRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("mirage_refresh_token");
+}
+
+function setStoredAccessToken(token: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem("mirage_access_token", token);
+}
+
+/** Parse `exp` claim from a JWT without verifying the signature. */
+function getTokenExp(token: string): number | null {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const decoded = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof decoded.exp === "number" ? decoded.exp : null;
+  } catch {
+    return null;
+  }
+}
+
+/** True when token expires within `bufferSeconds` (default 60s). */
+function isTokenExpiringSoon(token: string, bufferSeconds = 60): boolean {
+  const exp = getTokenExp(token);
+  if (!exp) return true;
+  const nowSec = Math.floor(Date.now() / 1000);
+  return nowSec >= exp - bufferSeconds;
+}
+
+/** True when token already expired. */
+function isTokenExpired(token: string): boolean {
+  const exp = getTokenExp(token);
+  if (!exp) return true;
+  return Math.floor(Date.now() / 1000) >= exp;
+}
+
+/** Attempt to refresh access token using stored refresh token. */
+async function refreshWsToken(): Promise<string | null> {
+  const refreshToken = getStoredRefreshToken();
+  if (!refreshToken) return null;
+  try {
+    const data = await authApi.refreshToken(refreshToken);
+    if (data?.access_token) {
+      // Preserve existing refresh token (backend does not rotate yet)
+      setStoredAccessToken(data.access_token);
+      // Notify other tabs / contexts that the token changed
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: "mirage_access_token",
+          newValue: data.access_token,
+        })
+      );
+      return data.access_token;
+    }
+  } catch {
+    // Fall through
+  }
+  return null;
+}
+
+/** Notify the rest of the app that WebSocket auth failed. */
+function notifyAuthRequired(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("mirage:ws_auth_required"));
+  }
+}
+
+// ------------------------------------------------------------------
 export function WebSocketProvider({ children }: { children: React.ReactNode }): React.ReactElement {
   const [isConnected, setIsConnected] = useState(false);
   const [notifications, setNotifications] = useState<NotificationResponse[]>([]);
@@ -22,6 +97,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectAttemptRef = useRef(0);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const authTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
 
@@ -33,7 +109,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
         setUnreadCount(data.items.filter((n) => !n.is_read).length);
       }
     }).catch(() => {
-      // Silently fail — we'll retry when socket connects
+      // Silently fail — notifications will sync when socket connects
     });
   }, []);
 
@@ -62,6 +138,32 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
       try {
         const msg = JSON.parse(event.data) as WsEvent;
         switch (msg.type) {
+          case "authenticated":
+            if (authTimeoutRef.current) {
+              clearTimeout(authTimeoutRef.current);
+              authTimeoutRef.current = null;
+            }
+            if (isMountedRef.current) {
+              setIsConnected(true);
+              reconnectAttemptRef.current = 0;
+            }
+            break;
+
+          case "error": {
+            const errPayload = msg.payload as { code?: number; message?: string } | undefined;
+            // Auth errors (4001) are terminal — don't keep reconnecting
+            if (errPayload?.code === 4001) {
+              if (authTimeoutRef.current) {
+                clearTimeout(authTimeoutRef.current);
+                authTimeoutRef.current = null;
+              }
+              socketRef.current?.close();
+              notifyAuthRequired();
+              return;
+            }
+            break;
+          }
+
           case "CONSENT_REQUESTED":
             setNotifications((prev) => {
               const payload = msg.payload as { consentId: string; doctorId: string; patientId: string };
@@ -120,16 +222,52 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
 
   const connect = useCallback(() => {
     if (!isMountedRef.current) return;
-    const token = getStoredAccessToken();
+
+    let token = getStoredAccessToken();
+
+    // If token missing entirely, nothing to do
     if (!token) return;
 
-    const ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`);
+    // If token expired but refresh token exists, try to refresh first
+    if (isTokenExpired(token)) {
+      if (getStoredRefreshToken()) {
+        refreshWsToken().then((newToken) => {
+          if (newToken && isMountedRef.current) {
+            connect();
+          } else {
+            notifyAuthRequired();
+          }
+        });
+        return;
+      }
+      notifyAuthRequired();
+      return;
+    }
+
+    // If token expires soon, refresh proactively in the background
+    if (isTokenExpiringSoon(token, 120)) {
+      refreshWsToken().then((newToken) => {
+        if (newToken) {
+          token = newToken;
+        }
+      });
+      // Continue with current token; we may get an auth error that triggers refresh later
+    }
+
+    // E: No ?token in URL — token sent via first message
+    const ws = new WebSocket(WS_URL);
     socketRef.current = ws;
 
     ws.onopen = () => {
       if (!isMountedRef.current) return;
-      setIsConnected(true);
-      reconnectAttemptRef.current = 0;
+      // Send auth immediately after connection
+      ws.send(JSON.stringify({ action: "auth", token }));
+      // Guard: if server never responds, don't leave us hanging forever
+      authTimeoutRef.current = setTimeout(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close();
+        }
+      }, AUTH_TIMEOUT_MS);
     };
 
     ws.onmessage = handleWsMessage;
@@ -151,10 +289,10 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
       ws.close();
     };
 
-    // Heartbeat
+    // Heartbeat: use action-based ping so server recognizes it (D)
     heartbeatRef.current = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "heartbeat" }));
+        ws.send(JSON.stringify({ action: "ping" }));
       }
     }, HEARTBEAT_INTERVAL);
   }, [handleWsMessage]);
@@ -164,6 +302,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
     return () => {
       isMountedRef.current = false;
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+      if (authTimeoutRef.current) clearTimeout(authTimeoutRef.current);
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (socketRef.current) {
         socketRef.current.close();
@@ -171,7 +310,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
     };
   }, [connect]);
 
-  // Re-establish socket when token changes (e.g. after login)
+  // Re-establish socket when token changes (e.g. after login or refresh)
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
       if (e.key === "mirage_access_token") {

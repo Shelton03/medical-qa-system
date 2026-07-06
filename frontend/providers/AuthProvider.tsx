@@ -162,6 +162,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
     }
   }, [router]);
 
+  useEffect(() => {
+    const handleWsAuthRequired = () => {
+      const { refresh } = readStoredTokens();
+      if (refresh) {
+        authApi
+          .refreshToken(refresh)
+          .then((refreshed) => {
+            storeTokens(refreshed.access_token, refresh);
+            // WebSocketProvider will reconnect on storage event
+          })
+          .catch(() => {
+            clearStoredTokens();
+            setState({
+              user: null,
+              isLoading: false,
+              isAuthenticated: false,
+              role: null,
+            });
+            router.push("/doctor/login");
+          });
+      } else {
+        clearStoredTokens();
+        setState({
+          user: null,
+          isLoading: false,
+          isAuthenticated: false,
+          role: null,
+        });
+        router.push("/doctor/login");
+      }
+    };
+
+    window.addEventListener("mirage:ws_auth_required", handleWsAuthRequired);
+    return () => window.removeEventListener("mirage:ws_auth_required", handleWsAuthRequired);
+  }, [router]);
+
   const value = {
     user: state.user,
     isLoading: state.isLoading,

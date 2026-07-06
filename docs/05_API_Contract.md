@@ -1474,9 +1474,47 @@ Endpoint
 
 Authentication
 
-JWT during connection establishment.
+Clients authenticate by sending an `auth` action message within 5 seconds of connection establishment. The JWT is not sent in the query string.
+
+```json
+{
+  "action": "auth",
+  "token": "<JWT>"
+}
+```
+
+If authentication succeeds, the server responds with:
+
+```json
+{
+  "type": "authenticated",
+  "payload": {
+    "user_id": "uuid"
+  },
+  "timestamp": "..."
+}
+```
+
+If authentication fails or times out, the server responds with:
+
+```json
+{
+  "type": "error",
+  "payload": {
+    "code": 4001,
+    "message": "..."
+  },
+  "timestamp": "..."
+}
+```
+
+then closes the connection with close code `4001`.
 
 After authentication, the client subscribes to one or more channels.
+
+Heartbeats
+
+The client should send an `{"action": "ping"}` message every 30 seconds. The server acknowledges with `pong` and has a 45-second receive timeout.
 
 Examples
 
