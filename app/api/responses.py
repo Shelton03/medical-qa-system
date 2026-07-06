@@ -18,15 +18,23 @@ class AnswerResponseData(BaseResponseData):
     disclaimer: str
     confidence_level: Literal["high", "medium", "low"]
 
+class EscalationResponseData(BaseResponseData):
+    response_type: Literal["escalation"] = "escalation"
+    content: str
+    summary: str
+
 # --- Generic API Response Wrappers ---
 class APIResponse(BaseModel):
     statusCode: int
     message: str
     success: bool
-    data: Optional[Union[AskResponseData, AnswerResponseData]] = None
+    data: Optional[Union[AskResponseData, AnswerResponseData, EscalationResponseData]] = None
 
 class AskResponse(APIResponse):
     data: AskResponseData
 
 class AnswerResponse(APIResponse):
     data: AnswerResponseData
+
+class EscalationResponse(APIResponse):
+    data: EscalationResponseData

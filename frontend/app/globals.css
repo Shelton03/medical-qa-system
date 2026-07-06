@@ -1,0 +1,164 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Mirage Theme Tokens */
+    --color-celestial-blue: #2563EB;
+    --color-stellar-white: #FAFAF8;
+    --color-mirage-black: #0A3828;
+    --color-health-green: #18A358;
+    --color-alert-orange: #EA580C;
+    --color-clinical-grey: #6B6760;
+    --color-deep-space: #0A0A0F;
+
+    --background: 0 0% 98%;
+    --foreground: 30 6% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 30 6% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 30 6% 10%;
+    --primary: 158 71% 14%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 40 14% 93%;
+    --secondary-foreground: 30 6% 10%;
+    --muted: 40 14% 93%;
+    --muted-foreground: 37 5% 40%;
+    --accent: 221 83% 53%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 17 88% 41%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 36 12% 86%;
+    --input: 36 10% 80%;
+    --ring: 221 83% 53%;
+    --radius: 1rem;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: var(--color-stellar-white);
+    color: var(--color-deep-space);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* Reduced motion support */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Focus styles for accessibility */
+  :focus-visible {
+    outline: 2px solid var(--color-celestial-blue);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@layer components {
+  /* Glassmorphism utilities */
+  .glass {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+
+  .glass-dark {
+    background: rgba(10, 10, 15, 0.6);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .glass-card {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    box-shadow: 0 4px 24px rgba(10, 10, 15, 0.06);
+  }
+
+  /* Skeleton shimmer */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      rgba(224, 221, 214, 0.6) 25%,
+      rgba(240, 238, 233, 0.8) 50%,
+      rgba(224, 221, 214, 0.6) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite linear;
+    border-radius: 8px;
+  }
+
+  /* Safe area utilities for PhoneFrame */
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 44px);
+  }
+
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 34px);
+  }
+
+  /* Touch target minimum */
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+@layer utilities {
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  /* Custom scrollbar */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(107, 103, 96, 0.3);
+    border-radius: 3px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgba(107, 103, 96, 0.5);
+  }
+}

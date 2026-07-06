@@ -1,12 +1,15 @@
-from typing import Union
+from typing import Union, Optional
+from fastapi import HTTPException
 from app.models.domain import Session, Message
-from app.api.responses import AskResponseData, AnswerResponseData
+from app.api.responses import AskResponseData, AnswerResponseData, EscalationResponseData
 from app.db.repositories import SessionRepository, MessageRepository
 from app.services.input_processor import InputProcessor
 from app.services.assessment import AssessmentService
 from app.services.decision_engine import DecisionEngine
 from app.services.question_gen import QuestionGenerator
 from app.services.answer_gen import AnswerGenerator
+from app.services.gap_analysis import GapAnalysisService
+from app.services.summarizer import ConversationSummarizer
 from app.core.logger import logger
 
 class Orchestrator:
@@ -20,22 +23,30 @@ class Orchestrator:
         self.decision_engine = DecisionEngine()
         self.question_gen = QuestionGenerator()
         self.answer_gen = AnswerGenerator()
+        self.gap_analyzer = GapAnalysisService()
+        self.summarizer = ConversationSummarizer()
 
-    async def handle_query(self, session_id: str | None, user_text: str) -> Union[AskResponseData, AnswerResponseData]:
+    async def handle_query(
+        self, 
+        session_id: str | None, 
+        user_text: str,
+        user_id: Optional[int] = None
+    ) -> Union[AskResponseData, AnswerResponseData, EscalationResponseData]:
         logger.info(f"--- Handling Query for Session: {session_id or 'NEW'} ---")
-        # 1. Load or Create Session
         if session_id:
             session = await self.session_repo.get_session(session_id)
             if not session:
                 logger.info(f"Session {session_id} not found, creating new.")
-                session = Session(session_id=session_id)
+                session = Session(session_id=session_id, user_id=user_id)
                 await self.session_repo.create_session(session)
+            elif session.user_id is not None and session.user_id != user_id:
+                logger.warning(f"Session {session_id} ownership mismatch.")
+                raise HTTPException(status_code=404, detail="Session not found")
         else:
-            session = Session() # New ID generated
+            session = Session(user_id=user_id)
             logger.info(f"Created new session: {session.session_id}")
             await self.session_repo.create_session(session)
 
-        # 2. Persist User Message
         user_msg = Message(
             session_id=session.session_id,
             role="user",
@@ -43,6 +54,10 @@ class Orchestrator:
             message_type="initial" if not session.assessment_done else "question" 
         )
         await self.message_repo.add_message(user_msg)
+
+        if not session.first_message:
+            session.first_message = user_text
+            await self.session_repo.update_session(session)
 
         # 3. Process Input
         logger.info("Step 1: Processing user input for entities...")
@@ -58,6 +73,45 @@ class Orchestrator:
         # 5. Build History Context
         history_msgs = await self.message_repo.get_session_history(session.session_id)
         history_text = "\n".join([f"{m.role.upper()}: {m.content}" for m in history_msgs])
+
+        # 5b. Dynamic Gap Re-Assessment
+        if session.assessment_done:
+            logger.info("Step 2b: Re-assessing information gaps...")
+            gap_result = await self.gap_analyzer.analyze(session, history_text)
+            session.missing_info = gap_result["still_missing"]
+            session.answered_info = gap_result["answered"]
+            session.gaps_remaining = len(session.missing_info)
+            logger.info(f"Gap re-assessment: {len(session.answered_info)} answered, {session.gaps_remaining} remaining")
+
+        # 5c. Max-Turn Escalation Check
+        user_turn_count = sum(1 for m in history_msgs if m.role == "user")
+        if user_turn_count > 15:
+            logger.warning(f"Max turn limit reached for session {session.session_id}")
+            session.assessment_done = True
+            session.gaps_remaining = 0
+            
+            # Generate patient-friendly summary
+            summary = await self.summarizer.summarize(history_text)
+            
+            escalation_msg = f"It seems this is more complicated than I can help with here. Let me book a session for you with a doctor. Here's a summary of what you've shared: {summary}"
+            
+            # Persist escalation message
+            bot_msg = Message(
+                session_id=session.session_id,
+                role="assistant",
+                content=escalation_msg,
+                message_type="answer"
+            )
+            await self.message_repo.add_message(bot_msg)
+            await self.session_repo.update_session(session)
+            
+            return EscalationResponseData(
+                session_id=session.session_id,
+                assessment_done=True,
+                confidence=0.0,
+                content=escalation_msg,
+                summary=history_text  # Raw history for backend/doctor use
+            )
 
         # 6. Decision Engine
         logger.info("Step 3: Running Decision Engine (Self-Consistency Loop)...")

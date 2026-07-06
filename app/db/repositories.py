@@ -25,6 +25,14 @@ class SessionRepository:
             session.model_dump()
         )
 
+    async def get_user_sessions(self, user_id: int) -> List[Session]:
+        cursor = self.collection.find({"user_id": user_id}).sort("updated_at", -1)
+        sessions = await cursor.to_list(length=None)
+        return [Session(**s) for s in sessions]
+
+    async def delete_session(self, session_id: str):
+        await self.collection.delete_one({"session_id": session_id})
+
 class MessageRepository:
     def __init__(self, db):
         self.collection = db["messages"]
@@ -36,3 +44,10 @@ class MessageRepository:
         cursor = self.collection.find({"session_id": session_id}).sort("timestamp", 1)
         messages = await cursor.to_list(length=None)
         return [Message(**msg) for msg in messages]
+
+    async def get_first_user_message(self, session_id: str) -> Optional[str]:
+        doc = await self.collection.find_one(
+            {"session_id": session_id, "role": "user"},
+            sort=[("timestamp", 1)]
+        )
+        return doc["content"] if doc else None

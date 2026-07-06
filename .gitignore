@@ -1,3 +1,6 @@
 .env
 .venv/
 __pycache__/
+*.log
+.next/
+backend.log

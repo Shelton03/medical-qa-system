@@ -1,54 +1,106 @@
-# Medical QA System
+# Mirage
 
-An interactive medical question answering system with self-consistency and abstention capabilities.
+**Mirage** is a healthcare platform designed to improve patient-doctor interactions through secure, real-time collaboration and AI-assisted clinical workflows. Built as a Healthathon demonstration platform, Mirage showcases a production-quality architecture ready for future expansion.
 
-## Installation
+---
 
-1. Clone the repository or navigate to the `medical-qa-system` directory.
+## Architecture Overview
 
-2. Create a virtual environment:
-   ```
-   python -m venv venv
-   ```
+Mirage follows a clean five-layer architecture:
 
-3. Activate the virtual environment:
-   - On macOS/Linux:
-     ```
-     source venv/bin/activate
-     ```
-   - On Windows:
-     ```
-     venv\Scripts\activate
-     ```
+```
+┌──────────────────────────────────────┐
+│         Next.js 14+ Frontend         │
+│  Patient App (PhoneFrame) │ Doctor   │
+│  Portal (Desktop-first)              │
+└──────────────────────────────────────┘
+                  │ REST + WebSockets
+                  ▼
+┌──────────────────────────────────────┐
+│         FastAPI Backend (Python)     │
+│  Auth │ API │ Services │ AI Layer    │
+└──────────────────────────────────────┘
+                  │
+     ┌────────────┴────────────┐
+     ▼                         ▼
+  PostgreSQL                 Redis
+  (UUID PKs, UTC)      (Cache / Events)
+```
 
-4. Install dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
+- **Patient Application** — Mobile-first web app rendered inside a realistic `PhoneFrame` simulator.
+- **Doctor Portal** — Desktop-first clinical dashboard with responsive layouts.
+- **Split-screen Demo Mode** — Side-by-side patient and doctor views for live demonstrations.
+- **AI Provider Abstractions** — Symptom checking, summarization, transcription, and diagnosis are vendor-agnostic.
 
-## Setup
+---
 
-1. Set up MongoDB:
-   - Ensure MongoDB is running locally or provide a connection URI.
+## Services & Ports
 
-2. Create a `.env` file in the root directory with the following variables:
-   ```
-   MONGODB_URI=mongodb://localhost:27017
-   MONGODB_DB_NAME=medical_qa
-   GEMINI_API_KEY=your_gemini_api_key_here
-   ```
+| Service   | Port | Description                           |
+|-----------|------|---------------------------------------|
+| Frontend  | 3000 | Next.js dev server (hot reload)       |
+| Backend   | 8000 | FastAPI dev server (auto-reload)      |
+| PostgreSQL| 5432 | Persistent database (`mirage_dev`)    |
+| Redis     | 6379 | Cache, Pub/Sub, event broker          |
 
-   Replace `your_gemini_api_key_here` with your actual Google Gemini API key.
+---
 
-## Running the Application
+## Quick Start
 
-1. Ensure the virtual environment is activated.
+```bash
+# 1. Clone & configure
+cp .env.example .env
 
-2. Run the application:
-   ```
-   python -m app.main
-   ```
+# 2. Build & launch
+make build && make up
 
-   The API will be available at `http://localhost:8000`.
+# 3. (Optional) Run migrations
+make migrate
+```
 
-3. To access the API documentation, visit `http://localhost:8000/docs` in your browser.
+The application will be available at:
+- **Frontend** → http://localhost:3000
+- **Backend API** → http://localhost:8000
+- **API Docs** → http://localhost:8000/docs
+
+---
+
+## Common Commands
+
+| Command           | Description                            |
+|-------------------|----------------------------------------|
+| `make build`      | Build all Docker images                |
+| `make up`         | Start the full stack                   |
+| `make down`       | Stop and remove containers             |
+| `make logs`       | Follow container logs                  |
+| `make migrate`    | Run Alembic migrations (`upgrade head`)|
+| `make shell-backend` | Open a shell in the backend container |
+| `make shell-frontend` | Open a shell in the frontend container|
+| `make test`       | Run the backend test suite             |
+
+---
+
+## Technology Stack
+
+- **Backend:** Python 3.12+, FastAPI, SQLAlchemy 2.x, Alembic, asyncpg, Pydantic
+- **Frontend:** Next.js 14+ (App Router), TypeScript, TailwindCSS
+- **Database:** PostgreSQL 16+ (UUID primary keys, UTC timestamps)
+- **Cache / Events:** Redis 7
+- **Authentication:** JWT + Demo Mode
+- **Infrastructure:** Docker, Docker Compose
+
+---
+
+## Development Notes
+
+- PostgreSQL is the only database — no MongoDB references anywhere.
+- All Python code requires strict type hints.
+- UUID v4 is used for every primary key.
+- Timestamps are stored in UTC.
+- Environment variables live in `.env` (never commit secrets).
+
+---
+
+## Demonstration Context
+
+This repository was built as part of a **Healthathon** event to demonstrate modern healthcare software architecture, real-time consent workflows, AI-assisted clinical tools, and responsive mobile simulation. While functional, it is intended as a foundation for future production expansion.
