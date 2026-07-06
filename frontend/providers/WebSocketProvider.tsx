@@ -5,7 +5,8 @@ import { WebSocketContext } from "@/hooks/useWebSocket";
 import { notificationsApi } from "@/lib/api";
 import type { ConsentStatus, NotificationResponse, WsEvent } from "@/lib/types";
 
-const WS_URL = "ws://localhost:8000/ws/notifications";
+// API Contract §WebSocket Contract — canonical endpoint is /ws
+const WS_URL = "ws://localhost:8000/ws";
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000];
 const HEARTBEAT_INTERVAL = 30000;
 
@@ -84,13 +85,6 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
           case "CONSENT_DECLINED":
           case "CONSENT_REVOKED": {
             const payloadConsent = msg.payload as { consentId: string };
-            const normalizedStatus: ConsentStatus =
-              msg.type === "CONSENT_APPROVED"
-                ? "approved"
-                : msg.type === "CONSENT_DECLINED"
-                ? "declined"
-                : "revoked";
-            // Update local consent-related notifications if applicable
             setNotifications((prev) =>
               prev.map((n) =>
                 n.id === payloadConsent.consentId
@@ -98,7 +92,6 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
                   : n
               )
             );
-            // Trigger a toast via console or custom event could go here
             break;
           }
 

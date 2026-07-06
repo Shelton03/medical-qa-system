@@ -1,4 +1,4 @@
-"""Simple in-memory rate-limiting middleware."""
+"""In-memory rate-limiting middleware aligned with API Contract."""
 
 from __future__ import annotations
 
@@ -9,26 +9,42 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-# 100 requests per minute per IP per endpoint
-_RATE_LIMIT = 100
-_WINDOW_SECONDS = 60
+# API Contract §Rate Limiting
+_LIMITS: dict[str, tuple[int, int]] = {
+    "auth": (10, 60),      # 10 per 60s
+    "ai": (30, 60),        # 30 per 60s
+    "search": (60, 60),    # 60 per 60s
+    "default": (100, 60),  # 100 per 60s
+}
 
-# In-memory store: {ip: {endpoint_key: [(timestamp, count), ...]}}
+# In-memory store: {ip: {category: [(timestamp, 1), ...]}}
 _store: dict[str, dict[str, list[tuple[float, int]]]] = {}
 
 
-def _is_limited(ip: str, endpoint: str) -> tuple[bool, dict[str, Any]]:
+def _get_category(path: str) -> str:
+    """Map request path to rate-limit category."""
+    if path.startswith("/api/v1/auth"):
+        return "auth"
+    if path.startswith("/api/v1/ai"):
+        return "ai"
+    if path.startswith("/api/v1/doctor/search") or path.startswith("/api/v1/patients/search"):
+        return "search"
+    return "default"
+
+
+def _is_limited(ip: str, category: str) -> tuple[bool, dict[str, Any]]:
     now = time.monotonic()
-    window_start = now - _WINDOW_SECONDS
+    limit, window = _LIMITS.get(category, _LIMITS["default"])
+    window_start = now - window
 
     ip_store = _store.setdefault(ip, {})
-    endpoint_history = ip_store.setdefault(endpoint, [])
+    history = ip_store.setdefault(category, [])
 
-    # Prune old entries
-    endpoint_history[:] = [entry for entry in endpoint_history if entry[0] > window_start]
+    # Prune expired entries
+    history[:] = [entry for entry in history if entry[0] > window_start]
 
-    total = sum(count for _ts, count in endpoint_history)
-    if total >= _RATE_LIMIT:
+    total = len(history)
+    if total >= limit:
         return True, {
             "success": False,
             "data": None,
@@ -38,14 +54,11 @@ def _is_limited(ip: str, endpoint: str) -> tuple[bool, dict[str, Any]]:
                     "message": "Rate limit exceeded. Try again later.",
                 }
             ],
-            "meta": {"reset_after": _WINDOW_SECONDS},
+            "meta": {"reset_after": window},
         }
 
-    if endpoint_history:
-        endpoint_history[-1] = (now, endpoint_history[-1][1] + 1)
-    else:
-        endpoint_history.append((now, 1))
-
+    # Append new entry (fixed: no longer replaces single entry)
+    history.append((now, 1))
     return False, {}
 
 
@@ -53,8 +66,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """
     In-memory rate-limiting middleware.
 
-    - Tracks requests per IP per endpoint.
-    - Limit: 100 req/min per IP.
+    - Per-IP, per-category sliding window.
+    - Auth: 10/min, AI: 30/min, Search: 60/min, General: 100/min.
     - Returns 429 with standard envelope when exceeded.
     - Skips rate limit for health endpoints.
     """
@@ -67,9 +80,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         ip = request.client.host if request.client else "unknown"
-        endpoint = f"{request.method}:{path}"
+        category = _get_category(path)
 
-        limited, error_body = _is_limited(ip, endpoint)
+        limited, error_body = _is_limited(ip, category)
         if limited:
             return JSONResponse(status_code=429, content=error_body)
 
