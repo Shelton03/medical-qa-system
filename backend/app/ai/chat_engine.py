@@ -30,8 +30,9 @@ class ChatEngine:
     async def create_session(
         self,
         db: AsyncSession,
-        doctor_id: UUID,
+        doctor_id: UUID | None = None,
         patient_id: UUID | None = None,
+        initiated_by: str | None = None,
     ) -> AISessionModel:
         """Create a new AI session row and return it."""
         session = AISessionModel(
@@ -39,6 +40,7 @@ class ChatEngine:
             patient_id=patient_id,
             status="ACTIVE",
             provider_name="mock",
+            provider_metadata={"initiated_by": initiated_by} if initiated_by else None,
         )
         db.add(session)
         await db.flush()
@@ -158,9 +160,12 @@ class ChatEngine:
 
         await self.add_message(db, session_id, "assistant", assistant_text)
 
-        # Emit real-time AI response event
+        # Emit real-time AI response event to the appropriate channel
+        # Patient-initiated sessions → emit to patient channel
+        # Doctor-initiated sessions → emit to doctor channel
+        channel = f"patient:{session.patient_id}" if session.doctor_id is None else f"doctor:{session.doctor_id}"
         await emit_ws_event(
-            f"doctor:{session.doctor_id}",
+            channel,
             WSEventType.AI_RESPONSE_READY,
             {
                 "session_id": str(session_id),
@@ -199,9 +204,10 @@ class ChatEngine:
         assistant_text = "".join(full_chunks)
         await self.add_message(db, session_id, "assistant", assistant_text)
 
-        # Emit real-time AI response event
+        # Emit real-time AI response event to the appropriate channel
+        channel = f"patient:{session.patient_id}" if session.doctor_id is None else f"doctor:{session.doctor_id}"
         await emit_ws_event(
-            f"doctor:{session.doctor_id}",
+            channel,
             WSEventType.AI_RESPONSE_READY,
             {
                 "session_id": str(session_id),

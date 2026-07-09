@@ -27,6 +27,7 @@ from app.audit import router as audit_router
 from app.notifications.router import router as notifications_router
 from app.notifications.websocket_router import router as notifications_ws_router
 from app.websocket.router import router as ws_router
+from app.appointment import router as appointment_router
 from app.middleware.correlation_id import CorrelationIdMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.audit_log import AuditLogMiddleware
@@ -103,6 +104,11 @@ app.include_router(records_router, prefix="/api/v1/records", tags=["Records"])
 app.include_router(timeline_router, prefix="/api/v1/timeline", tags=["Timeline"])
 app.include_router(transcription_router, prefix="/api/v1/transcription", tags=["Transcription"])
 app.include_router(audit_router, prefix="/api/v1/audit", tags=["Audit"])
+app.include_router(
+    appointment_router,
+    prefix="/api/v1/appointments",
+    tags=["Appointments"],
+)
 app.include_router(
     notifications_router,
     prefix="/api/v1/notifications",

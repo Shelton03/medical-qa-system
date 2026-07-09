@@ -57,7 +57,7 @@ def generate_demo_tokens(role: str) -> tuple[str, str, uuid.UUID]:
         raise ValueError("Unsupported demo role")
 
     access = create_access_token(synthetic_uuid, role=role)
-    refresh = create_refresh_token(synthetic_uuid)
+    refresh = create_refresh_token(synthetic_uuid, role=role)
     return access, refresh, synthetic_uuid
 
 

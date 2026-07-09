@@ -37,6 +37,7 @@ def create_access_token(
 
 def create_refresh_token(
     subject: uuid.UUID,
+    role: str,
     expires_delta: timedelta | None = None,
 ) -> str:
     """Create a new JWT refresh token."""
@@ -46,6 +47,7 @@ def create_refresh_token(
     payload = {
         "type": "refresh",
         "sub": str(subject),
+        "role": role,
         "jti": jti,
         "iat": now,
         "exp": expire,

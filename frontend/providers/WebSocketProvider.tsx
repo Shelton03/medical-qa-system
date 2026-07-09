@@ -89,6 +89,37 @@ function notifyAuthRequired(): void {
   }
 }
 
+/** Decode JWT payload to extract user info. */
+function decodeJwtPayload(token: string): { sub?: string; role?: string } | null {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    return JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+  } catch {
+    return null;
+  }
+}
+
+/** Build subscription channels based on user role and ID. */
+function buildChannels(token: string | null): string[] {
+  if (!token) return [];
+  const payload = decodeJwtPayload(token);
+  if (!payload?.sub || !payload?.role) return [];
+  
+  const userId = payload.sub;
+  const role = payload.role;
+  
+  // Subscribe to role-specific channel
+  if (role === "patient") {
+    return [`patient:${userId}`];
+  } else if (role === "doctor") {
+    return [`doctor:${userId}`];
+  } else if (role === "admin") {
+    return [`admin:${userId}`];
+  }
+  return [];
+}
+
 // ------------------------------------------------------------------
 export function WebSocketProvider({ children }: { children: React.ReactNode }): React.ReactElement {
   const [isConnected, setIsConnected] = useState(false);
@@ -101,15 +132,23 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
 
-  // Fetch initial notifications
+  // Fetch initial notifications only when authenticated
   useEffect(() => {
+    const token = getStoredAccessToken();
+    if (!token || isTokenExpired(token)) {
+      return; // Don't fetch if not authenticated
+    }
     notificationsApi.listNotifications({ unread_only: false, limit: 50 }).then((data) => {
       if (isMountedRef.current) {
         setNotifications(data.items);
         setUnreadCount(data.items.filter((n) => !n.is_read).length);
       }
-    }).catch(() => {
-      // Silently fail — notifications will sync when socket connects
+    }).catch((err) => {
+      // Stop polling on 401 — user not authenticated
+      if ((err as { status?: number })?.status === 401) {
+        return;
+      }
+      // Silently fail otherwise — notifications will sync when socket connects
     });
   }, []);
 
@@ -153,6 +192,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
             const errPayload = msg.payload as { code?: number; message?: string } | undefined;
             // Auth errors (4001) are terminal — don't keep reconnecting
             if (errPayload?.code === 4001) {
+              authFailedRef.current = true; // Mark auth as failed
               if (authTimeoutRef.current) {
                 clearTimeout(authTimeoutRef.current);
                 authTimeoutRef.current = null;
@@ -166,11 +206,11 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
 
           case "CONSENT_REQUESTED":
             setNotifications((prev) => {
-              const payload = msg.payload as { consentId: string; doctorId: string; patientId: string };
-              const existing = prev.find((n) => n.id === payload.consentId);
+              const payload = msg.payload as { consent_id: string; doctor_id: string; patient_id: string };
+              const existing = prev.find((n) => n.id === payload.consent_id);
               if (existing) return prev;
               const incoming: NotificationResponse = {
-                id: payload.consentId,
+                id: payload.consent_id,
                 type: "CONSENT",
                 title: "New Consent Request",
                 body: "A doctor has requested access to your medical record.",
@@ -186,10 +226,10 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
           case "CONSENT_APPROVED":
           case "CONSENT_DECLINED":
           case "CONSENT_REVOKED": {
-            const payloadConsent = msg.payload as { consentId: string };
+            const payloadConsent = msg.payload as { consent_id: string };
             setNotifications((prev) =>
               prev.map((n) =>
-                n.id === payloadConsent.consentId
+                n.id === payloadConsent.consent_id
                   ? { ...n, is_read: true }
                   : n
               )
@@ -220,7 +260,39 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
     [playNotificationSound]
   );
 
-  const connect = useCallback(() => {
+  // Track if we've hit an auth error to stop reconnecting
+  const authFailedRef = useRef(false);
+
+  // Subscribe to channels after authentication
+  const subscribeToChannels = useCallback(() => {
+    const token = getStoredAccessToken();
+    if (!token || !socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
+    
+    const channels = buildChannels(token);
+    if (channels.length > 0) {
+      socketRef.current.send(JSON.stringify({ action: "subscribe", channels }));
+    }
+  }, []);
+
+  // Handle authenticated event to trigger subscription
+  const handleMessageWithSubscribe = useCallback(
+    (event: MessageEvent) => {
+      try {
+        const msg = JSON.parse(event.data) as WsEvent;
+        if (msg.type === "authenticated") {
+          // Subscribe to role-specific channels after auth
+          subscribeToChannels();
+        }
+        handleWsMessage(event);
+      } catch {
+        // Ignore malformed messages
+      }
+    },
+    [handleWsMessage, subscribeToChannels]
+  );
+
+  // Update connect to use the new message handler
+  const connectWithSubscribe = useCallback(() => {
     if (!isMountedRef.current) return;
 
     let token = getStoredAccessToken();
@@ -233,7 +305,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
       if (getStoredRefreshToken()) {
         refreshWsToken().then((newToken) => {
           if (newToken && isMountedRef.current) {
-            connect();
+            connectWithSubscribe();
           } else {
             notifyAuthRequired();
           }
@@ -254,15 +326,12 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
       // Continue with current token; we may get an auth error that triggers refresh later
     }
 
-    // E: No ?token in URL — token sent via first message
     const ws = new WebSocket(WS_URL);
     socketRef.current = ws;
 
     ws.onopen = () => {
       if (!isMountedRef.current) return;
-      // Send auth immediately after connection
       ws.send(JSON.stringify({ action: "auth", token }));
-      // Guard: if server never responds, don't leave us hanging forever
       authTimeoutRef.current = setTimeout(() => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.close();
@@ -270,35 +339,53 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
       }, AUTH_TIMEOUT_MS);
     };
 
-    ws.onmessage = handleWsMessage;
+    ws.onmessage = handleMessageWithSubscribe;
 
     ws.onclose = () => {
       if (!isMountedRef.current) return;
       setIsConnected(false);
 
+      // Clear heartbeat interval
+      if (heartbeatRef.current) {
+        clearInterval(heartbeatRef.current);
+        heartbeatRef.current = null;
+      }
+
+      // Stop reconnecting if auth failed permanently
+      if (authFailedRef.current) {
+        return;
+      }
+
+      // Stop reconnecting if no token exists
+      const currentToken = getStoredAccessToken();
+      if (!currentToken) {
+        return;
+      }
+
       const delay = RECONNECT_DELAYS[Math.min(reconnectAttemptRef.current, RECONNECT_DELAYS.length - 1)];
       reconnectAttemptRef.current += 1;
 
       reconnectTimeoutRef.current = setTimeout(() => {
-        if (isMountedRef.current) connect();
+        if (isMountedRef.current && !authFailedRef.current) {
+          connectWithSubscribe();
+        }
       }, delay);
     };
 
     ws.onerror = () => {
-      // Let onclose handle reconnection
       ws.close();
     };
 
-    // Heartbeat: use action-based ping so server recognizes it (D)
+    // Heartbeat
     heartbeatRef.current = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ action: "ping" }));
       }
     }, HEARTBEAT_INTERVAL);
-  }, [handleWsMessage]);
+  }, [handleMessageWithSubscribe]);
 
   useEffect(() => {
-    connect();
+    connectWithSubscribe();
     return () => {
       isMountedRef.current = false;
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
@@ -308,20 +395,24 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
         socketRef.current.close();
       }
     };
-  }, [connect]);
+  }, [connectWithSubscribe]);
 
   // Re-establish socket when token changes (e.g. after login or refresh)
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
       if (e.key === "mirage_access_token") {
+        // Reset auth failed state when new token is set
+        if (e.newValue) {
+          authFailedRef.current = false;
+        }
         if (socketRef.current) socketRef.current.close();
         reconnectAttemptRef.current = 0;
-        setTimeout(() => connect(), 100);
+        setTimeout(() => connectWithSubscribe(), 100);
       }
     };
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
-  }, [connect]);
+  }, [connectWithSubscribe]);
 
   const markRead = useCallback(async (notificationId: string) => {
     setNotifications((prev) =>

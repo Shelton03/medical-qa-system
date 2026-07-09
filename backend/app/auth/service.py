@@ -39,7 +39,7 @@ async def login_doctor(
 
     if user and verify_password(password, user.password_hash):
         access = create_access_token(user.id, role=user.role)
-        refresh = create_refresh_token(user.id)
+        refresh = create_refresh_token(user.id, role=user.role)
         return TokenPair(
             access_token=access,
             refresh_token=refresh,
@@ -79,7 +79,7 @@ async def login_patient(
 
     if user and verify_password(pin, user.password_hash):
         access = create_access_token(user.id, role=user.role)
-        refresh = create_refresh_token(user.id)
+        refresh = create_refresh_token(user.id, role=user.role)
         return TokenPair(
             access_token=access,
             refresh_token=refresh,
@@ -118,11 +118,10 @@ async def refresh_access_token(refresh_token: str) -> str:
     if jti and await redis.get(f"blacklist:{jti}"):
         raise UnauthorizedException("Refresh token has been revoked.")
 
-    # Re-issue access token (role is not stored in refresh token; keep generic for now)
-    # In production you'd look up the user role from the DB.
+    # Re-issue access token with role from refresh token payload
     role = payload.get("role", "unknown")
-    if role == "unknown" and is_demo_token(payload):
-        role = "doctor" if subject == _DEMO_DOCTOR_UUID else "patient"
+    if role == "unknown":
+        raise UnauthorizedException("Token missing role.")
 
     return create_access_token(subject, role=role)
 

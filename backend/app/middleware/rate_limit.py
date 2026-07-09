@@ -86,4 +86,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if limited:
             return JSONResponse(status_code=429, content=error_body)
 
-        return await call_next(request)
+        response = await call_next(request)
+        
+        # Don't count 401 Unauthorized responses against rate limit
+        # This prevents auth failures from triggering rate limits
+        if response.status_code == 401:
+            ip_store = _store.get(ip, {})
+            history = ip_store.get(category, [])
+            if history:
+                history.pop()  # Remove the entry we just added
+        
+        return response

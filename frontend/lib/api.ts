@@ -33,6 +33,7 @@ import type {
   NotificationResponse,
   PatientFullProfileResponse,
   PatientResponse,
+  TimelineEvent,
   TokenPair,
   UnreadCountResponse,
   UserProfile,
@@ -104,12 +105,12 @@ export class ApiError extends Error {
     this.status = status;
   }
 
-  static fromEnvelope<T>(envelope: ApiEnvelope<T> | null): ApiError {
+  static fromEnvelope<T>(envelope: ApiEnvelope<T> | null, status?: number): ApiError {
     if (!envelope || !envelope.errors || envelope.errors.length === 0) {
-      return new ApiError("UNKNOWN", "An unknown error occurred.");
+      return new ApiError("UNKNOWN", "An unknown error occurred.", undefined, status);
     }
     const first = envelope.errors[0];
-    return new ApiError(first.code, first.message, first.field);
+    return new ApiError(first.code, first.message, first.field, status);
   }
 }
 
@@ -175,13 +176,13 @@ async function request<T>(
 
     const retryBody = (await retryResponse.json()) as ApiEnvelope<T>;
     if (!retryResponse.ok) {
-      throw ApiError.fromEnvelope(retryBody);
+      throw ApiError.fromEnvelope(retryBody, retryResponse.status);
     }
     return parseEnvelope(retryBody);
   }
 
   if (!response.ok) {
-    throw ApiError.fromEnvelope(body);
+    throw ApiError.fromEnvelope(body, response.status);
   }
 
   if (!body) {
@@ -289,8 +290,8 @@ export const patientsApi = {
   getMyProfile: (): Promise<PatientFullProfileResponse> =>
     request<PatientFullProfileResponse>("/me/patient", { method: "GET" }),
 
-  getMyTimeline: (): Promise<VisitResponse[]> =>
-    request<VisitResponse[]>("/me/patient/timeline", { method: "GET" }),
+  getMyTimeline: (): Promise<TimelineEvent[]> =>
+    request<TimelineEvent[]>("/me/patient/timeline", { method: "GET" }),
 
   getMyVisit: (visitId: string): Promise<VisitWithDetailsResponse> =>
     request<VisitWithDetailsResponse>(`/me/patient/visit/${visitId}`, { method: "GET" }),
@@ -350,7 +351,7 @@ export const consentsApi = {
 
 export const consultationsApi = {
   startConsultation: (data: VisitCreatePayload): Promise<VisitResponse> =>
-    request<VisitResponse>("/consultations", {
+    request<VisitResponse>("/doctor", {
       method: "POST",
       body: JSON.stringify(data),
     }),
@@ -364,35 +365,35 @@ export const consultationsApi = {
     if (params?.status) search.set("status", params.status);
     if (params?.limit) search.set("limit", String(params.limit));
     if (params?.offset !== undefined) search.set("offset", String(params.offset));
-    return request<VisitResponse[]>(`/consultations?${search.toString()}`, { method: "GET" });
+    return request<VisitResponse[]>(`/doctor?${search.toString()}`, { method: "GET" });
   },
 
   getConsultation: (visitId: string): Promise<VisitWithDetailsResponse> =>
-    request<VisitWithDetailsResponse>(`/consultations/${visitId}`, { method: "GET" }),
+    request<VisitWithDetailsResponse>(`/doctor/${visitId}`, { method: "GET" }),
 
   addNote: (visitId: string, data: ClinicalNoteCreatePayload): Promise<ClinicalNoteResponse> =>
-    request<ClinicalNoteResponse>(`/consultations/${visitId}/notes`, {
+    request<ClinicalNoteResponse>(`/doctor/${visitId}/notes`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
   addDiagnosis: (visitId: string, data: DiagnosisCreatePayload): Promise<DiagnosisResponse> =>
-    request<DiagnosisResponse>(`/consultations/${visitId}/diagnoses`, {
+    request<DiagnosisResponse>(`/doctor/${visitId}/diagnoses`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
   addMedication: (visitId: string, data: MedicationCreatePayload): Promise<MedicationResponse> =>
-    request<MedicationResponse>(`/consultations/${visitId}/medications`, {
+    request<MedicationResponse>(`/doctor/${visitId}/medications`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
   completeConsultation: (visitId: string): Promise<VisitResponse> =>
-    request<VisitResponse>(`/consultations/${visitId}/complete`, { method: "POST", body: JSON.stringify({}) }),
+    request<VisitResponse>(`/doctor/${visitId}/complete`, { method: "POST", body: JSON.stringify({}) }),
 
   cancelConsultation: (visitId: string): Promise<VisitResponse> =>
-    request<VisitResponse>(`/consultations/${visitId}/cancel`, { method: "POST", body: JSON.stringify({}) }),
+    request<VisitResponse>(`/doctor/${visitId}/cancel`, { method: "POST", body: JSON.stringify({}) }),
 };
 
 export const aiApi = {

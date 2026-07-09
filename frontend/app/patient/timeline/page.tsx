@@ -9,9 +9,13 @@ import {
   ClipboardList,
   ChevronDown,
   ChevronUp,
+  Sparkles,
+  AlertTriangle,
+  HeartPulse,
+  Activity,
 } from "lucide-react";
 import { patientsApi } from "@/lib/api";
-import type { VisitResponse, DiagnosisResponse, MedicationResponse } from "@/lib/types";
+import type { TimelineEvent } from "@/lib/types";
 import { LoadingSkeleton } from "@/components/ui/LoadingSkeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { cn } from "@/lib/utils";
@@ -19,9 +23,9 @@ import { cn } from "@/lib/utils";
 interface TimelineEntry {
   id: string;
   date: string;
-  type: "visit" | "diagnosis" | "medication";
+  type: string;
   title: string;
-  subtitle?: string;
+  subtitle?: string | null;
   details?: Record<string, string | null>;
 }
 
@@ -46,21 +50,53 @@ function formatTime(dateStr: string): string {
   return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
-const typeConfig = {
-  visit: { icon: Stethoscope, color: "bg-celestialBlue/10 text-celestialBlue", label: "Visit" },
-  diagnosis: { icon: ClipboardList, color: "bg-alertOrange/10 text-alertOrange", label: "Diagnosis" },
-  medication: { icon: Pill, color: "bg-healthGreen/10 text-healthGreen", label: "Medication" },
+const iconMap: Record<string, React.ElementType> = {
+  VISIT: Stethoscope,
+  DIAGNOSIS: ClipboardList,
+  PRESCRIPTION: Pill,
+  ALLERGY_UPDATE: AlertTriangle,
+  CONDITION: HeartPulse,
+  AI_SESSION: Sparkles,
 };
+
+const colorMap: Record<string, string> = {
+  VISIT: "bg-celestialBlue/10 text-celestialBlue",
+  DIAGNOSIS: "bg-alertOrange/10 text-alertOrange",
+  PRESCRIPTION: "bg-healthGreen/10 text-healthGreen",
+  ALLERGY_UPDATE: "bg-alertOrange/10 text-alertOrange",
+  CONDITION: "bg-healthGreen/10 text-healthGreen",
+  AI_SESSION: "bg-healthGreen/10 text-healthGreen",
+};
+
+function mapEvent(e: TimelineEvent): TimelineEntry {
+  const iconKey = e.event_type in iconMap ? e.event_type : "VISIT";
+
+  // Build details object from whatever extra fields the event carries
+  const details: Record<string, string | null> = {};
+  if (e.description) details.description = e.description;
+  if (e.facility_name) details.facility = e.facility_name;
+  if (e.doctor_name) details.doctor = e.doctor_name;
+  if (e.status) details.status = e.status;
+
+  return {
+    id: e.event_id,
+    date: e.date,
+    type: iconKey,
+    title: e.title || "Unknown Event",
+    subtitle: e.description || null,
+    details,
+  };
+}
 
 function TimelineEventCard({ event }: { event: TimelineEntry }): React.ReactElement {
   const [expanded, setExpanded] = React.useState(false);
-  const config = typeConfig[event.type];
-  const Icon = config.icon;
+  const Icon = iconMap[event.type] || Stethoscope;
+  const colorClass = colorMap[event.type] || "bg-celestialBlue/10 text-celestialBlue";
 
   return (
     <div className="relative flex gap-3">
       <div className="flex flex-col items-center">
-        <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", config.color)}>
+        <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", colorClass)}>
           <Icon className="w-4 h-4" />
         </div>
         <div className="w-px flex-1 bg-border my-1" />
@@ -119,30 +155,14 @@ function TimelineEventCard({ event }: { event: TimelineEntry }): React.ReactElem
 }
 
 export default function PatientTimelinePage(): React.ReactElement {
-  const { data: visits, isLoading, error } = useTimelineData();
+  const { data: events, isLoading, error } = useTimelineData();
 
   const entries: TimelineEntry[] = useMemo(() => {
-    if (!visits) return [];
-    const result: TimelineEntry[] = [];
-    for (const visit of visits) {
-      result.push({
-        id: `visit-${visit.id}`,
-        date: visit.visit_date,
-        type: "visit",
-        title: visit.chief_complaint || visit.reason || "Medical Visit",
-        subtitle: visit.status,
-        details: {
-          summary: visit.summary,
-          ai_summary: visit.ai_summary,
-          follow_up: visit.follow_up_required ? "Required" : "Not required",
-        },
-      });
-    }
-    // Sort newest first
-    return result.sort(
+    if (!events) return [];
+    return events.map(mapEvent).sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
-  }, [visits]);
+  }, [events]);
 
   return (
     <div className="p-4 space-y-4 pb-20">
@@ -169,7 +189,7 @@ export default function PatientTimelinePage(): React.ReactElement {
         <EmptyState
           icon={<ClipboardList className="w-8 h-8 text-clinicalGrey" />}
           title="No timeline events"
-          description="Your health timeline will appear here after your first visit."
+          description="Your health timeline will appear here after your first visit or activity."
         />
       )}
 

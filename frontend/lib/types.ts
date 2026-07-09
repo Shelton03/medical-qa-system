@@ -110,6 +110,21 @@ export interface PatientFullProfileResponse extends PatientResponse {
 }
 
 // ------------------------------------------------------------------
+// Timeline
+// ------------------------------------------------------------------
+
+export interface TimelineEvent {
+  event_id: string;
+  event_type: string;
+  date: string;
+  title: string;
+  description: string | null;
+  facility_name: string | null;
+  doctor_name: string | null;
+  status: string | null;
+}
+
+// ------------------------------------------------------------------
 // Consent
 // ------------------------------------------------------------------
 
@@ -258,12 +273,14 @@ export interface MedicationCreatePayload {
 
 export interface AISessionResponse {
   id: string;
-  doctor_id: string;
   patient_id: string | null;
+  doctor_id: string | null;
+  consultation_id: string | null;
   provider_name: string | null;
   status: string;
   started_at: string;
-  ended_at: string | null;
+  completed_at: string | null;
+  conversation_summary: string | null;
 }
 
 export interface AIMessageResponse {
