@@ -8,7 +8,12 @@ import type { NotificationResponse, WsEvent } from "@/lib/types";
 // ------------------------------------------------------------------
 // Configuration
 // ------------------------------------------------------------------
-const WS_URL = "ws://localhost:8000/ws";
+function getWsUrl(): string {
+  if (typeof window === "undefined") return "ws://localhost:8000/ws";
+  if (process.env.NEXT_PUBLIC_WS_URL) return process.env.NEXT_PUBLIC_WS_URL;
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}/ws`;
+}
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000, 60000];
 const HEARTBEAT_INTERVAL = 30000;
 const AUTH_TIMEOUT_MS = 5000;
@@ -16,19 +21,35 @@ const AUTH_TIMEOUT_MS = 5000;
 // ------------------------------------------------------------------
 // Token helpers
 // ------------------------------------------------------------------
+function _detectRoleFromPath(): string {
+  if (typeof window === "undefined") return "global";
+  const path = window.location.pathname;
+  if (path.startsWith("/doctor")) return "doctor";
+  if (path.startsWith("/patient")) return "patient";
+  if (path.startsWith("/admin")) return "admin";
+  return "global";
+}
+
+function _tokenKey(role: string, suffix: string): string {
+  return `mirage_${role}_${suffix}`;
+}
+
 function getStoredAccessToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("mirage_access_token");
+  const role = _detectRoleFromPath();
+  return localStorage.getItem(_tokenKey(role, "access_token"));
 }
 
 function getStoredRefreshToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("mirage_refresh_token");
+  const role = _detectRoleFromPath();
+  return localStorage.getItem(_tokenKey(role, "refresh_token"));
 }
 
 function setStoredAccessToken(token: string): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem("mirage_access_token", token);
+  const role = _detectRoleFromPath();
+  localStorage.setItem(_tokenKey(role, "access_token"), token);
 }
 
 /** Parse `exp` claim from a JWT without verifying the signature. */
@@ -68,9 +89,10 @@ async function refreshWsToken(): Promise<string | null> {
       // Preserve existing refresh token (backend does not rotate yet)
       setStoredAccessToken(data.access_token);
       // Notify other tabs / contexts that the token changed
+      const role = _detectRoleFromPath();
       window.dispatchEvent(
         new StorageEvent("storage", {
-          key: "mirage_access_token",
+          key: _tokenKey(role, "access_token"),
           newValue: data.access_token,
         })
       );
@@ -326,7 +348,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
       // Continue with current token; we may get an auth error that triggers refresh later
     }
 
-    const ws = new WebSocket(WS_URL);
+    const ws = new WebSocket(getWsUrl());
     socketRef.current = ws;
 
     ws.onopen = () => {
@@ -400,7 +422,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
   // Re-establish socket when token changes (e.g. after login or refresh)
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
-      if (e.key === "mirage_access_token") {
+      if (e.key === _tokenKey(_detectRoleFromPath(), "access_token")) {
         // Reset auth failed state when new token is set
         if (e.newValue) {
           authFailedRef.current = false;

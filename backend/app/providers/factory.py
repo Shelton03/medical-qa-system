@@ -21,6 +21,8 @@ from app.providers.implementations.mock_transcription import MockTranscriptionPr
 from app.providers.implementations.mock_notification import MockNotificationProvider
 from app.providers.implementations.mock_storage import MockStorageProvider
 from app.providers.implementations.mock_email import MockEmailProvider
+from app.providers.implementations.local_ai_provider import LocalDiagnosisProvider, LocalSummaryProvider
+from app.providers.implementations.local_transcription_provider import LocalTranscriptionProvider
 
 _registry: dict[str, Any] = {}
 
@@ -36,6 +38,8 @@ def get_ai_provider() -> DiagnosisProvider:
     if key not in _registry:
         if name == "mock":
             _registry[key] = MockDiagnosisProvider()
+        elif name == "local":
+            _registry[key] = LocalDiagnosisProvider()
         else:
             raise ValueError(f"Unsupported AI_PROVIDER: {name}")
     return _registry[key]
@@ -60,6 +64,8 @@ def get_summary_provider() -> ClinicalSummaryProvider:
     if key not in _registry:
         if name == "mock":
             _registry[key] = MockClinicalSummaryProvider()
+        elif name == "local":
+            _registry[key] = LocalSummaryProvider()
         else:
             raise ValueError(f"Unsupported SUMMARY_PROVIDER: {name}")
     return _registry[key]
@@ -72,6 +78,8 @@ def get_transcription_provider() -> TranscriptionProvider:
     if key not in _registry:
         if name == "mock":
             _registry[key] = MockTranscriptionProvider()
+        elif name == "local":
+            _registry[key] = LocalTranscriptionProvider()
         else:
             raise ValueError(f"Unsupported TRANSCRIPTION_PROVIDER: {name}")
     return _registry[key]

@@ -3,12 +3,12 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, FileText, Activity, Bell, User } from "lucide-react";
+import { Home, FileText, Stethoscope, Bell, User } from "lucide-react";
 
 const navItems = [
   { href: "/patient", label: "Home", icon: Home },
   { href: "/patient/timeline", label: "Timeline", icon: FileText },
-  { href: "/patient/symptom-check", label: "Symptoms", icon: Activity },
+  { href: "/patient/services", label: "Services", icon: Stethoscope },
   { href: "/patient/notifications", label: "Alerts", icon: Bell },
   { href: "/patient/profile", label: "Profile", icon: User },
 ];

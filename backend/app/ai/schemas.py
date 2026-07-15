@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class AISessionCreate(BaseModel):
     model_config = ConfigDict()
     patient_id: UUID | None = None
+    appointment_id: UUID | None = None
 
 
 class AISessionResponse(BaseModel):

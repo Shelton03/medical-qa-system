@@ -188,10 +188,13 @@ User
 │     ├── MedicalRecord
 │     │       │
 │     │       ├── Visit
+│     │       │       │
+│     │       │       ├── Diagnosis
+│     │       │       ├── Medication
+│     │       │       └── LabResult
+│     │       │
 │     │       ├── Allergy
-│     │       ├── Medication
-│     │       ├── Diagnosis
-│     │       ├── LabResult
+│     │       ├── ChronicCondition
 │     │       └── Document
 │     │
 │     ├── Notification
@@ -434,6 +437,10 @@ ai_summary
 
 follow_up_required
 ```
+
+- transcript
+
+  The full text transcript of the consultation, generated via real-time speech-to-text. Stored as plain text. Nullable.
 
 Indexes
 

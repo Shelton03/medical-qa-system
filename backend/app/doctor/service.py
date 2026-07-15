@@ -221,6 +221,22 @@ async def complete_consultation(
     return visit
 
 
+async def update_visit_transcript(
+    db: AsyncSession,
+    visit_id: uuid.UUID,
+    doctor_id: uuid.UUID,
+    transcript: str,
+) -> Visit:
+    """Update the transcript of a visit."""
+    visit = await repository.get_visit_by_id(db, visit_id)
+    if not visit:
+        raise NotFoundException("Visit not found.", error_code="VISIT_NOT_FOUND")
+    if visit.doctor_id != doctor_id:
+        raise ForbiddenException("You are not the doctor for this visit.")
+
+    return await repository.update_visit_transcript(db, visit_id, transcript)
+
+
 async def cancel_consultation(
     db: AsyncSession,
     visit_id: uuid.UUID,

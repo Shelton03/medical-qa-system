@@ -797,7 +797,7 @@ async def seed_demo_data(db: AsyncSession) -> None:
         imaging_created += 1
 
     # Consent requests
-    consent_statuses = ["PENDING", "APPROVED", "DENIED", "EXPIRED"]
+    consent_statuses = ["pending", "approved", "declined", "expired"]
     for _ in range(target_consents):
         patient, user, record = random.choice(patients)
         doctor = random.choice(doctors)
@@ -806,12 +806,12 @@ async def seed_demo_data(db: AsyncSession) -> None:
         approved_at = None
         expires_at = None
         denied_reason = None
-        if status == "APPROVED":
+        if status == "approved":
             approved_at = requested_at + timedelta(hours=random.randint(1, 24))
             expires_at = approved_at + timedelta(days=30)
-        elif status == "DENIED":
+        elif status == "declined":
             denied_reason = "Patient declined access."
-        elif status == "EXPIRED":
+        elif status == "expired":
             approved_at = requested_at + timedelta(hours=2)
             expires_at = datetime.now() - timedelta(days=1)
         db.add(

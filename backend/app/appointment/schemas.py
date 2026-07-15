@@ -61,7 +61,7 @@ class SlotAllocationResponse(BaseModel):
 # Response Schemas
 # ------------------------------------------------------------------
 class AppointmentResponse(BaseModel):
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     patient_id: uuid.UUID
@@ -74,19 +74,14 @@ class AppointmentResponse(BaseModel):
     allocated_start_time: Optional[time] = None
     allocated_end_time: Optional[time] = None
 
-    status: AppointmentStatus
+    status: str
     reason: Optional[str] = None
     symptoms: Optional[str] = None
-    priority: Priority
+    priority: str
     is_emergency: bool
     triage_score: int
 
     preferred_doctor_id: Optional[uuid.UUID] = None
-
-    # Nested data
-    doctor: Optional[DoctorBrief] = None
-    facility: Optional[FacilityBrief] = None
-    slot_allocation: Optional[SlotAllocationResponse] = None
 
     created_at: datetime
 

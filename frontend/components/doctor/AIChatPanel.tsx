@@ -2,25 +2,62 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Loader2, User, Bot, Sparkles } from "lucide-react";
-import { aiApi } from "@/lib/api";
+import { Send, Loader2, User, Bot, Sparkles, Mic } from "lucide-react";
+import { aiApi, doctorApi } from "@/lib/api";
+import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
+import { useToast } from "@/hooks/useToast";
 import type { AIMessageResponse } from "@/lib/types";
 
 interface AIChatPanelProps {
   sessionId: string;
   patientId?: string;
+  visitId?: string;
   initialMessages?: AIMessageResponse[];
 }
 
 type ChatMessage = AIMessageResponse & { isStreaming?: boolean };
 
-export function AIChatPanel({ sessionId, patientId, initialMessages = [] }: AIChatPanelProps): React.ReactElement {
+/** Simple audio waveform bars. */
+function Waveform({ active }: { active: boolean }): React.ReactElement {
+  return (
+    <div className="flex items-center gap-0.5 h-4">
+      {[0, 1, 2].map((i) => (
+        <motion.div
+          key={i}
+          animate={
+            active
+              ? {
+                  height: [4, 12, 6, 14, 4],
+                }
+              : { height: 4 }
+          }
+          transition={{
+            duration: 0.6,
+            repeat: Infinity,
+            repeatType: "reverse",
+            delay: i * 0.15,
+          }}
+          className="w-0.5 bg-red-400 rounded-full"
+        />
+      ))}
+    </div>
+  );
+}
+
+export function AIChatPanel({
+  sessionId,
+  patientId,
+  visitId,
+  initialMessages = [],
+}: AIChatPanelProps): React.ReactElement {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
+  const [finalTranscript, setFinalTranscript] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const { showToast } = useToast();
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -36,66 +73,72 @@ export function AIChatPanel({ sessionId, patientId, initialMessages = [] }: AICh
     }
   }, [initialMessages]);
 
-  const handleSend = useCallback(async () => {
-    const trimmed = input.trim();
-    if (!trimmed || isTyping) return;
+  const handleSendMessage = useCallback(
+    async (content: string) => {
+      const trimmed = content.trim();
+      if (!trimmed || isTyping) return;
 
-    const userMessage: ChatMessage = {
-      id: `temp-${Date.now()}`,
-      session_id: sessionId,
-      role: "user",
-      content: trimmed,
-      model_name: null,
-      token_count: null,
-      created_at: new Date().toISOString(),
-    };
+      const userMessage: ChatMessage = {
+        id: `temp-${Date.now()}`,
+        session_id: sessionId,
+        role: "user",
+        content: trimmed,
+        model_name: null,
+        token_count: null,
+        created_at: new Date().toISOString(),
+      };
 
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-    setIsTyping(true);
-    setStreamingContent("");
+      setMessages((prev) => [...prev, userMessage]);
+      setInput("");
+      setIsTyping(true);
+      setStreamingContent("");
 
-    try {
-      const streamBuffer: string[] = [];
-      await aiApi.sendMessageStream(sessionId, trimmed, (chunk) => {
-        streamBuffer.push(chunk);
-        setStreamingContent(streamBuffer.join(""));
-      });
+      try {
+        const streamBuffer: string[] = [];
+        await aiApi.sendMessageStream(sessionId, trimmed, (chunk) => {
+          streamBuffer.push(chunk);
+          setStreamingContent(streamBuffer.join(""));
+        });
 
-      // Once streaming completes, add the full AI message
-      const fullContent = streamBuffer.join("");
-      if (fullContent) {
+        const fullContent = streamBuffer.join("");
+        if (fullContent) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `ai-${Date.now()}`,
+              session_id: sessionId,
+              role: "assistant",
+              content: fullContent,
+              model_name: null,
+              token_count: null,
+              created_at: new Date().toISOString(),
+            },
+          ]);
+        }
+      } catch {
         setMessages((prev) => [
           ...prev,
           {
-            id: `ai-${Date.now()}`,
+            id: `err-${Date.now()}`,
             session_id: sessionId,
             role: "assistant",
-            content: fullContent,
+            content: "I'm sorry, I encountered an error processing your request. Please try again.",
             model_name: null,
             token_count: null,
             created_at: new Date().toISOString(),
           },
         ]);
+      } finally {
+        setIsTyping(false);
+        setStreamingContent("");
       }
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `err-${Date.now()}`,
-          session_id: sessionId,
-          role: "assistant",
-          content: "I'm sorry, I encountered an error processing your request. Please try again.",
-          model_name: null,
-          token_count: null,
-          created_at: new Date().toISOString(),
-        },
-      ]);
-    } finally {
-      setIsTyping(false);
-      setStreamingContent("");
-    }
-  }, [input, isTyping, sessionId]);
+    },
+    [isTyping, sessionId]
+  );
+
+  const handleSend = useCallback(() => {
+    handleSendMessage(input);
+  }, [input, handleSendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -109,6 +152,44 @@ export function AIChatPanel({ sessionId, patientId, initialMessages = [] }: AICh
     inputRef.current?.focus();
   };
 
+  // ---------------------------------------------------------------------
+  // Voice Recorder integration
+  // ---------------------------------------------------------------------
+  const onTranscript = useCallback(
+    async (text: string) => {
+      setFinalTranscript(text);
+      // Auto-send the transcript as a chat message
+      await handleSendMessage(text);
+      // Also persist to the visit record if visitId is available
+      if (visitId) {
+        try {
+          await doctorApi.updateVisitTranscript(visitId, text);
+        } catch {
+          // Silently ignore persistence errors — the transcript is still in chat
+        }
+      }
+    },
+    [handleSendMessage, visitId]
+  );
+
+  const { recording, liveText, startRecording, stopRecording } =
+    useVoiceRecorder(onTranscript);
+
+  // Show live transcript in input while recording
+  useEffect(() => {
+    if (recording && liveText) {
+      setInput(liveText);
+    }
+  }, [recording, liveText]);
+
+  const toggleRecording = useCallback(() => {
+    if (recording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  }, [recording, startRecording, stopRecording]);
+
   return (
     <div className="flex flex-col h-full bg-white rounded-card border border-border overflow-hidden">
       {/* Header */}
@@ -116,10 +197,19 @@ export function AIChatPanel({ sessionId, patientId, initialMessages = [] }: AICh
         <div className="w-8 h-8 rounded-full bg-celestialBlue/10 flex items-center justify-center">
           <Bot className="w-4 h-4 text-celestialBlue" />
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-mirageBlack">AI Clinical Assistant</p>
-          <p className="text-[11px] text-clinicalGrey">{patientId ? `Patient session #${sessionId.slice(0, 8)}` : `Session #${sessionId.slice(0, 8)}`}</p>
+          <p className="text-[11px] text-clinicalGrey">
+            {patientId ? `Patient session #${sessionId.slice(0, 8)}` : `Session #${sessionId.slice(0, 8)}`}
+          </p>
         </div>
+        {recording && (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Waveform active={recording} />
+            <span className="text-[10px] font-medium text-red-500">Recording</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+          </div>
+        )}
       </div>
 
       {/* Messages */}
@@ -212,19 +302,36 @@ export function AIChatPanel({ sessionId, patientId, initialMessages = [] }: AICh
       {/* Input */}
       <div className="p-3 border-t border-border bg-white">
         <div className="flex items-end gap-2">
+          {/* Mic button */}
+          <button
+            onClick={toggleRecording}
+            className={`p-2.5 rounded-button transition-colors shrink-0 ${
+              recording
+                ? "bg-red-500 text-white hover:bg-red-600"
+                : "bg-secondary text-clinicalGrey hover:bg-clinicalGrey/20"
+            }`}
+            aria-label={recording ? "Stop recording" : "Start voice recording"}
+            title={recording ? "Stop recording" : "Start voice recording"}
+          >
+            <Mic className={`w-4 h-4 ${recording ? "animate-pulse" : ""}`} />
+          </button>
           <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask the AI assistant..."
+            placeholder={recording ? "Recording… speak now" : "Ask the AI assistant…"}
             rows={1}
-            className="flex-1 min-h-[40px] max-h-32 px-3 py-2.5 rounded-input bg-secondary text-sm text-mirageBlack placeholder:text-clinicalGrey focus:outline-none focus:ring-2 focus:ring-celestialBlue/20 resize-none scrollbar-thin"
+            className={`flex-1 min-h-[40px] max-h-32 px-3 py-2.5 rounded-input text-sm transition-colors resize-none scrollbar-thin ${
+              recording
+                ? "bg-red-50 text-mirageBlack placeholder:text-red-400 focus:ring-2 focus:ring-red-500/20 border border-red-200"
+                : "bg-secondary text-mirageBlack placeholder:text-clinicalGrey focus:ring-2 focus:ring-celestialBlue/20"
+            }`}
           />
           <button
             onClick={handleSend}
             disabled={!input.trim() || isTyping}
-            className="p-2.5 rounded-button bg-mirageBlack text-white hover:bg-mirageBlack/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="p-2.5 rounded-button bg-mirageBlack text-white hover:bg-mirageBlack/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
             aria-label="Send message"
           >
             <Send className="w-4 h-4" />

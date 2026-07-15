@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { authApi, clearStoredTokens } from "@/lib/api";
+import { authApi, clearStoredTokens, setStoredTokens } from "@/lib/api";
 import type { UserProfile, UserRole } from "@/lib/types";
 import { AuthContext } from "@/hooks/useAuth";
 
@@ -13,23 +13,27 @@ interface AuthState {
   role: UserRole | null;
 }
 
-const STORAGE_KEYS = {
-  accessToken: "mirage_access_token",
-  refreshToken: "mirage_refresh_token",
-} as const;
-
-function readStoredTokens(): { access: string | null; refresh: string | null } {
+function readStoredTokens(role: UserRole): { access: string | null; refresh: string | null } {
   if (typeof window === "undefined") return { access: null, refresh: null };
+  const accessKey = `mirage_${role}_access_token`;
+  const refreshKey = `mirage_${role}_refresh_token`;
   return {
-    access: localStorage.getItem(STORAGE_KEYS.accessToken),
-    refresh: localStorage.getItem(STORAGE_KEYS.refreshToken),
+    access: localStorage.getItem(accessKey),
+    refresh: localStorage.getItem(refreshKey),
   };
 }
 
-function storeTokens(access: string, refresh: string): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEYS.accessToken, access);
-  localStorage.setItem(STORAGE_KEYS.refreshToken, refresh);
+function getActiveRole(): UserRole | null {
+  if (typeof window === "undefined") return null;
+  const path = window.location.pathname;
+  if (path.startsWith("/doctor")) return "doctor";
+  if (path.startsWith("/patient")) return "patient";
+  if (path.startsWith("/admin")) return "admin";
+  // Try to infer from any stored token
+  for (const role of ["doctor", "patient", "admin"] as UserRole[]) {
+    if (localStorage.getItem(`mirage_${role}_access_token`)) return role;
+  }
+  return null;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }): React.ReactElement {
@@ -62,7 +66,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
   }, []);
 
   const checkAuth = useCallback(async () => {
-    const { access, refresh } = readStoredTokens();
+    const activeRole = getActiveRole();
+    if (!activeRole) {
+      setState((prev) => ({ ...prev, isLoading: false }));
+      return;
+    }
+    const { access, refresh } = readStoredTokens(activeRole);
     if (!access) {
       setState((prev) => ({ ...prev, isLoading: false }));
       return;
@@ -79,7 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       if (refresh) {
         try {
           const refreshed = await authApi.refreshToken(refresh);
-          storeTokens(refreshed.access_token, refresh);
+          setStoredTokens(activeRole, refreshed.access_token, refresh);
           await hydrateUser();
           return;
         } catch {
@@ -105,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       setState((prev) => ({ ...prev, isLoading: true }));
       try {
         const response = await authApi.loginDoctor(email, password);
-        storeTokens(response.access_token, response.refresh_token);
+        setStoredTokens("doctor", response.access_token, response.refresh_token);
         const profile = await authApi.getMe();
         setState({
           user: profile,
@@ -122,12 +131,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
     [router]
   );
 
+  const loginAdmin = useCallback(
+    async (email: string, password: string) => {
+      setState((prev) => ({ ...prev, isLoading: true }));
+      try {
+        const response = await authApi.loginAdmin(email, password);
+        setStoredTokens("admin", response.access_token, response.refresh_token);
+        const profile = await authApi.getMe();
+        setState({
+          user: profile,
+          isLoading: false,
+          isAuthenticated: true,
+          role: profile.role,
+        });
+        router.push("/admin/dashboard");
+      } catch (error) {
+        setState((prev) => ({ ...prev, isLoading: false }));
+        throw error;
+      }
+    },
+    [router]
+  );
+
   const loginPatient = useCallback(
     async (national_id: string, pin: string) => {
       setState((prev) => ({ ...prev, isLoading: true }));
       try {
         const response = await authApi.loginPatient(national_id, pin);
-        storeTokens(response.access_token, response.refresh_token);
+        setStoredTokens("patient", response.access_token, response.refresh_token);
         const profile = await authApi.getMe();
         setState({
           user: profile,
@@ -164,12 +195,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
 
   useEffect(() => {
     const handleWsAuthRequired = () => {
-      const { refresh } = readStoredTokens();
+      const activeRole = getActiveRole();
+      if (!activeRole) return;
+      const { refresh } = readStoredTokens(activeRole);
       if (refresh) {
         authApi
           .refreshToken(refresh)
           .then((refreshed) => {
-            storeTokens(refreshed.access_token, refresh);
+            setStoredTokens(activeRole, refreshed.access_token, refresh);
             // WebSocketProvider will reconnect on storage event
           })
           .catch(() => {
@@ -204,6 +237,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
     isAuthenticated: state.isAuthenticated,
     role: state.role,
     loginDoctor,
+    loginAdmin,
     loginPatient,
     logout,
   };

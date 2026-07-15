@@ -18,6 +18,12 @@ DEMO_CREDENTIALS = {
             "pin": "2024",
         }
     ],
+    "admin": [
+        {
+            "email": "admin@mirage.health",
+            "password": "Admin2024!",
+        }
+    ],
 }
 
 _DEMO_DOCTOR_UUID = uuid.uuid5(uuid.NAMESPACE_OID, "demo-doctor-dr.sarah.mirage@mirage.health")
@@ -41,6 +47,16 @@ def authenticate_demo_patient(national_id: str, pin: str) -> bool:
         return False
     for cred in DEMO_CREDENTIALS["patient"]:
         if cred["national_id"] == national_id and cred["pin"] == pin:
+            return True
+    return False
+
+
+def authenticate_demo_admin(email: str, password: str) -> bool:
+    """Check whether provided credentials match demo admin credentials."""
+    if not settings.demo_mode_enabled:
+        return False
+    for cred in DEMO_CREDENTIALS["admin"]:
+        if cred["email"] == email and cred["password"] == password:
             return True
     return False
 

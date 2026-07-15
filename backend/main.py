@@ -23,6 +23,7 @@ from app.doctor import router as doctor_router
 from app.records import router as records_router
 from app.timeline import router as timeline_router
 from app.transcription import router as transcription_router
+from app.transcription.ws import router as transcription_ws_router
 from app.audit import router as audit_router
 from app.notifications.router import router as notifications_router
 from app.notifications.websocket_router import router as notifications_ws_router
@@ -83,6 +84,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -115,6 +120,7 @@ app.include_router(
     tags=["Notifications"],
 )
 app.include_router(notifications_ws_router)
+app.include_router(transcription_ws_router)
 app.include_router(ws_router)
 
 
@@ -182,7 +188,4 @@ async def request_validation_handler(
     return JSONResponse(status_code=422, content=envelope.model_dump())
 
 
-@app.get("/health", tags=["Health"])
-async def health_check() -> dict[str, str]:
-    """Service health check."""
-    return {"status": "ok", "service": "mirage-backend"}
+

@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from starlette.responses import StreamingResponse
 
 from app.ai.chat_engine import ChatEngine
@@ -107,6 +108,7 @@ async def create_session(
         doctor_id=doctor_id,
         patient_id=patient_id,
         initiated_by=role,
+        appointment_id=body.appointment_id,
     )
     await db.commit()
     return Envelope.ok(AISessionResponse.model_validate(session))
@@ -119,7 +121,9 @@ async def get_session_for_user(
 ) -> AISessionModel:
     """Return an AI session if the current user is allowed to view it."""
     result = await db.execute(
-        select(AISessionModel).where(AISessionModel.id == session_id)
+        select(AISessionModel)
+        .where(AISessionModel.id == session_id)
+        .options(selectinload(AISessionModel.messages))
     )
     session = result.scalar_one_or_none()
     if not session:

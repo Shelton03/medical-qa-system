@@ -33,14 +33,21 @@ class ChatEngine:
         doctor_id: UUID | None = None,
         patient_id: UUID | None = None,
         initiated_by: str | None = None,
+        appointment_id: UUID | None = None,
     ) -> AISessionModel:
         """Create a new AI session row and return it."""
+        metadata: dict = {}
+        if initiated_by:
+            metadata["initiated_by"] = initiated_by
+        if appointment_id:
+            metadata["appointment_id"] = str(appointment_id)
+
         session = AISessionModel(
             doctor_id=doctor_id,
             patient_id=patient_id,
             status="ACTIVE",
             provider_name="mock",
-            provider_metadata={"initiated_by": initiated_by} if initiated_by else None,
+            provider_metadata=metadata if metadata else None,
         )
         db.add(session)
         await db.flush()
@@ -108,7 +115,7 @@ class ChatEngine:
             .where(
                 ConsentRequest.doctor_id == doctor_id,
                 ConsentRequest.patient_id == patient_id,
-                ConsentRequest.status == "APPROVED",
+                ConsentRequest.status == "approved",
             )
             .order_by(ConsentRequest.approved_at.desc())
         )

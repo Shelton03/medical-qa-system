@@ -27,6 +27,42 @@ from app.models import User
 from app.schemas.token import TokenPair
 
 
+async def login_admin(
+    email: str,
+    password: str,
+    db: AsyncSession,
+) -> TokenPair:
+    """Authenticate an admin by email/password, falling back to demo credentials."""
+    stmt = select(User).where(User.email == email, User.role == "admin")
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if user and verify_password(password, user.password_hash):
+        access = create_access_token(user.id, role=user.role)
+        refresh = create_refresh_token(user.id, role=user.role)
+        return TokenPair(
+            access_token=access,
+            refresh_token=refresh,
+            expires_in=settings.jwt_expiration_seconds,
+            role=user.role,
+            demo_mode=False,
+        )
+
+    # Demo fallback for admin
+    from app.auth.demo import authenticate_demo_admin
+    if authenticate_demo_admin(email, password):
+        access, refresh, _ = generate_demo_tokens("admin")
+        return TokenPair(
+            access_token=access,
+            refresh_token=refresh,
+            expires_in=settings.jwt_expiration_seconds,
+            role="admin",
+            demo_mode=True,
+        )
+
+    raise UnauthorizedException("Invalid credentials.")
+
+
 async def login_doctor(
     email: str,
     password: str,

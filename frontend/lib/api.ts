@@ -11,28 +11,48 @@
  */
 
 import type {
-  ApiEnvelope,
   AIMessageCreatePayload,
   AIMessageResponse,
   AISessionCreatePayload,
   AISessionResponse,
   AISessionWithMessagesResponse,
+  ApiEnvelope,
+  AdminDashboardStats,
+  AdminDoctorListItem,
+  AppointmentAdminFilters,
+  AppointmentAdminItem,
+  AppointmentCreateRequest,
+  AppointmentListResponse,
+  AppointmentResponse,
+  AppointmentStatus,
+  AuditLogEntry,
+  ClinicalNoteCreatePayload,
+  ClinicalNoteResponse,
+  ClinicalSummary,
   ConsentListResponse,
   ConsentRequestResponse,
   CountResponse,
   CreateConsentPayload,
-  ClinicalNoteCreatePayload,
-  ClinicalNoteResponse,
-  ClinicalSummary,
   DiagnosisCreatePayload,
   DiagnosisResponse,
   DifferentialDiagnosis,
+  DoctorSchedule,
+  DoctorScheduleResponse,
+  DoctorScheduleView,
+  Facility,
   MedicationCreatePayload,
   MedicationResponse,
   NotificationListResponse,
   NotificationResponse,
+  PaginatedAdminAppointments,
   PatientFullProfileResponse,
   PatientResponse,
+  ScheduleAppointment,
+  ScheduleUpdateRequest,
+  TimeOffAdminRequest,
+  TimeOffEntry,
+  TimeOffRequest,
+  TimeOffResponse,
   TimelineEvent,
   TokenPair,
   UnreadCountResponse,
@@ -40,36 +60,73 @@ import type {
   VisitCreatePayload,
   VisitResponse,
   VisitWithDetailsResponse,
-  AuditLogEntry,
+  DoctorPatientOverview,
 } from "./types";
 
 const API_BASE = "/api/v1";
 
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
   accessToken: "mirage_access_token",
   refreshToken: "mirage_refresh_token",
 } as const;
 
-function getStoredAccessToken(): string | null {
+/** Derive role-specific token keys from the current page path. */
+function _detectRoleFromPath(): string {
+  if (typeof window === "undefined") return "global";
+  const path = window.location.pathname;
+  if (path.startsWith("/doctor")) return "doctor";
+  if (path.startsWith("/patient")) return "patient";
+  if (path.startsWith("/admin")) return "admin";
+  return "global";
+}
+
+function _tokenKey(role: string, suffix: string): string {
+  return `mirage_${role}_${suffix}`;
+}
+
+function getCurrentRole(): string {
+  if (typeof window === "undefined") return "global";
+  // Try to infer from stored token, then fall back to path
+  const path = window.location.pathname;
+  if (path.startsWith("/doctor")) return "doctor";
+  if (path.startsWith("/patient")) return "patient";
+  if (path.startsWith("/admin")) return "admin";
+  return "global";
+}
+
+export function getStoredAccessToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(STORAGE_KEYS.accessToken);
+  const key = _tokenKey(getCurrentRole(), "access_token");
+  return localStorage.getItem(key);
 }
 
 function getStoredRefreshToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(STORAGE_KEYS.refreshToken);
+  const key = _tokenKey(getCurrentRole(), "refresh_token");
+  return localStorage.getItem(key);
 }
 
-function setStoredTokens(access: string, refresh: string): void {
+export function setStoredTokens(role: string, access: string, refresh: string): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEYS.accessToken, access);
-  localStorage.setItem(STORAGE_KEYS.refreshToken, refresh);
+  const accessKey = _tokenKey(role, "access_token");
+  const refreshKey = _tokenKey(role, "refresh_token");
+  localStorage.setItem(accessKey, access);
+  localStorage.setItem(refreshKey, refresh);
+}
+
+export function clearStoredTokensForRole(role: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(_tokenKey(role, "access_token"));
+  localStorage.removeItem(_tokenKey(role, "refresh_token"));
 }
 
 export function clearStoredTokens(): void {
   if (typeof window === "undefined") return;
-  localStorage.removeItem(STORAGE_KEYS.accessToken);
-  localStorage.removeItem(STORAGE_KEYS.refreshToken);
+  // Clear all role-specific tokens for safety
+  for (const role of ["doctor", "patient", "admin", "global"]) {
+    localStorage.removeItem(_tokenKey(role, "access_token"));
+    localStorage.removeItem(_tokenKey(role, "refresh_token"));
+  }
 }
 
 function redirectToLogin(): void {
@@ -79,6 +136,8 @@ function redirectToLogin(): void {
     window.location.href = "/doctor/login";
   } else if (path.startsWith("/patient")) {
     window.location.href = "/patient/login";
+  } else if (path.startsWith("/admin")) {
+    window.location.href = "/admin/login";
   } else {
     window.location.href = "/";
   }
@@ -231,7 +290,7 @@ async function attemptTokenRefresh(): Promise<boolean> {
     if (!envelope.success || !envelope.data) return false;
 
     // Keep existing refresh token unless backend returns a new one
-    setStoredTokens(envelope.data.access_token, refreshToken);
+    setStoredTokens(getCurrentRole(), envelope.data.access_token, refreshToken);
     return true;
   } catch {
     return false;
@@ -247,6 +306,13 @@ async function attemptTokenRefresh(): Promise<boolean> {
 export const authApi = {
   loginDoctor: (email: string, password: string): Promise<TokenPair> =>
     request<TokenPair>("/auth/doctor/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+      skipAuth: true,
+    }),
+
+  loginAdmin: (email: string, password: string): Promise<TokenPair> =>
+    request<TokenPair>("/auth/admin/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
       skipAuth: true,
@@ -314,6 +380,17 @@ export const patientsApi = {
     request<PatientResponse>("/patients", {
       method: "POST",
       body: JSON.stringify(data),
+    }),
+};
+
+export const doctorApi = {
+  getDoctorPatientOverview: (patientId: string): Promise<DoctorPatientOverview> =>
+    request<DoctorPatientOverview>(`/doctor/patient/${patientId}`, { method: "GET" }),
+
+  updateVisitTranscript: (visitId: string, transcript: string): Promise<VisitResponse> =>
+    request<VisitResponse>(`/doctor/${visitId}/transcript`, {
+      method: "PATCH",
+      body: JSON.stringify(transcript),
     }),
 };
 
@@ -513,6 +590,69 @@ export const notificationsApi = {
     request<CountResponse>("/notifications/read-all", { method: "POST" }),
 };
 
+export const appointmentsApi = {
+  create: (data: AppointmentCreateRequest): Promise<AppointmentResponse> =>
+    request<AppointmentResponse>("/appointments", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  listMy: (params?: {
+    status?: string;
+    upcoming?: boolean;
+    limit?: number;
+    offset?: number;
+  }): Promise<AppointmentListResponse> => {
+    const search = new URLSearchParams();
+    if (params?.status) search.set("status", params.status);
+    if (params?.upcoming !== undefined) search.set("upcoming", String(params.upcoming));
+    if (params?.limit) search.set("limit", String(params.limit));
+    if (params?.offset !== undefined) search.set("offset", String(params.offset));
+    return request<AppointmentListResponse>(`/appointments/my?${search.toString()}`, { method: "GET" });
+  },
+
+  getById: (id: string): Promise<AppointmentResponse> =>
+    request<AppointmentResponse>(`/appointments/${id}`, { method: "GET" }),
+
+  cancel: (id: string, reason?: string): Promise<AppointmentResponse> =>
+    request<AppointmentResponse>(`/appointments/${id}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
+  confirm: (id: string): Promise<AppointmentResponse> =>
+    request<AppointmentResponse>(`/appointments/${id}/confirm`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  startConsultation: (id: string): Promise<{ consultation_id: string }> =>
+    request<{ consultation_id: string }>(`/appointments/${id}/start-consultation`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+};
+
+export const facilitiesApi = {
+  search: (query?: string, limit = 20, offset = 0): Promise<{ items: Facility[]; total: number; limit: number; offset: number }> => {
+    const search = new URLSearchParams();
+    if (query) search.set("q", query);
+    search.set("limit", String(limit));
+    search.set("offset", String(offset));
+    return request<{ items: Facility[]; total: number; limit: number; offset: number }>(`/appointments/facilities?${search.toString()}`, { method: "GET" });
+  },
+
+  getById: (id: string): Promise<Facility> =>
+    request<Facility>(`/appointments/facilities/${id}`, { method: "GET" }),
+
+  getDoctors: (id: string): Promise<
+    { id: string; name: string; specialty: string }[]
+  > =>
+    request<{ id: string; name: string; specialty: string }[]>(`/appointments/facilities/${id}/doctors`, {
+      method: "GET",
+    }),
+};
+
 export const auditApi = {
   getAccessHistory: (params?: {
     limit?: number;
@@ -523,4 +663,91 @@ export const auditApi = {
     if (params?.offset !== undefined) search.set("offset", String(params.offset));
     return request<{ items: AuditLogEntry[]; total: number }>(`/audit/history?${search.toString()}`, { method: "GET" });
   },
+};
+
+export const scheduleApi = {
+  getMySchedule: (): Promise<DoctorScheduleView> =>
+    request<DoctorScheduleView>("/doctor/schedule", { method: "GET" }),
+
+  getMyAppointmentsToday: (): Promise<ScheduleAppointment[]> =>
+    request<ScheduleAppointment[]>("/doctor/appointments/today", { method: "GET" }),
+
+  updateAppointmentStatus: (id: string, status: AppointmentStatus): Promise<ScheduleAppointment> =>
+    request<ScheduleAppointment>(`/doctor/appointments/${id}/status`, {
+      method: "PUT",
+      body: JSON.stringify({ status }),
+    }),
+
+  requestLeave: (data: TimeOffRequest): Promise<TimeOffResponse> =>
+    request<TimeOffResponse>("/doctor/time-off", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+};
+
+// ------------------------------------------------------------------
+// Admin API
+// ------------------------------------------------------------------
+
+export const adminApi = {
+  getDashboard: (): Promise<AdminDashboardStats> =>
+    request<AdminDashboardStats>("/appointments/admin/dashboard", { method: "GET" }),
+
+  listDoctors: (params?: { limit?: number; offset?: number }): Promise<AdminDoctorListItem[]> => {
+    const search = new URLSearchParams();
+    if (params?.limit) search.set("limit", String(params.limit));
+    if (params?.offset !== undefined) search.set("offset", String(params.offset));
+    return request<AdminDoctorListItem[]>(`/appointments/admin/doctors?${search.toString()}`, { method: "GET" });
+  },
+
+  getDoctorSchedule: (doctorId: string): Promise<DoctorScheduleResponse> =>
+    request<DoctorScheduleResponse>(`/appointments/admin/doctors/${doctorId}/schedule`, { method: "GET" }),
+
+  updateDoctorSchedule: (doctorId: string, data: ScheduleUpdateRequest): Promise<DoctorScheduleResponse> =>
+    request<DoctorScheduleResponse>(`/appointments/admin/doctors/${doctorId}/schedule`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  addTimeOff: (doctorId: string, data: TimeOffAdminRequest): Promise<TimeOffEntry> =>
+    request<TimeOffEntry>(`/appointments/admin/doctors/${doctorId}/time-off`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  listDoctorTimeOff: (doctorId: string): Promise<TimeOffEntry[]> =>
+    request<TimeOffEntry[]>(`/appointments/admin/doctors/${doctorId}/time-off`, { method: "GET" }),
+
+  approveTimeOff: (timeOffId: string): Promise<TimeOffEntry> =>
+    request<TimeOffEntry>(`/appointments/admin/doctors/time-off/${timeOffId}/approve`, { method: "POST" }),
+
+  rejectTimeOff: (timeOffId: string): Promise<TimeOffEntry> =>
+    request<TimeOffEntry>(`/appointments/admin/doctors/time-off/${timeOffId}/reject`, { method: "POST" }),
+
+  listAppointments: (filters?: AppointmentAdminFilters): Promise<PaginatedAdminAppointments> => {
+    const search = new URLSearchParams();
+    if (filters?.date_from) search.set("date_from", filters.date_from);
+    if (filters?.date_to) search.set("date_to", filters.date_to);
+    if (filters?.facility_id) search.set("facility_id", filters.facility_id);
+    if (filters?.status) search.set("status", filters.status);
+    if (filters?.priority) search.set("priority", filters.priority);
+    if (filters?.doctor_search) search.set("doctor_search", filters.doctor_search);
+    if (filters?.patient_search) search.set("patient_search", filters.patient_search);
+    if (filters?.page) search.set("page", String(filters.page));
+    if (filters?.page_size) search.set("page_size", String(filters.page_size));
+    return request<PaginatedAdminAppointments>(`/appointments/admin/appointments?${search.toString()}`, { method: "GET" });
+  },
+
+  cancelAppointment: (appointmentId: string): Promise<{ message: string }> =>
+    request<{ message: string }>(`/appointments/admin/appointments/${appointmentId}/cancel`, { method: "PUT" }),
+
+  reassignDoctor: (appointmentId: string, doctorId: string): Promise<AppointmentAdminItem> =>
+    request<AppointmentAdminItem>(`/appointments/admin/appointments/${appointmentId}/reassign`, {
+      method: "PUT",
+      body: JSON.stringify({ doctor_id: doctorId }),
+    }),
+
+  // Placeholder for future facilities endpoints
+  listFacilities: (): Promise<{ id: string; name: string; address: string }[]> =>
+    request<{ id: string; name: string; address: string }[]>("/appointments/admin/facilities", { method: "GET" }),
 };

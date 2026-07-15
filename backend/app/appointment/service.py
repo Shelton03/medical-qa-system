@@ -29,6 +29,8 @@ from app.shared.exceptions import (
     ValidationException,
     ForbiddenException,
 )
+from app.websocket.publisher import emit_ws_event
+from app.websocket.events import WSEventType
 
 # ------------------------------------------------------------------
 # Specialty keyword mapping for symptom matching
@@ -435,7 +437,19 @@ class AppointmentService:
         await db.commit()
         await db.refresh(appointment)
 
-        # TODO: Send notification to doctor
+        # Emit WebSocket event
+        await emit_ws_event(
+            f"doctor:{doctor_id}",
+            WSEventType.APPOINTMENT_CREATED,
+            {
+                "appointment_id": str(appointment.id),
+                "patient_id": str(patient_id),
+                "facility_id": str(facility_id),
+                "appointment_date": appointment.appointment_date.isoformat(),
+                "priority": priority,
+                "is_emergency": is_emergency,
+            },
+        )
 
         return appointment
 
@@ -546,6 +560,18 @@ class AppointmentService:
 
         await db.commit()
         await db.refresh(appointment)
+
+        # Emit WebSocket event
+        await emit_ws_event(
+            f"doctor:{appointment.doctor_id}",
+            WSEventType.APPOINTMENT_CANCELLED,
+            {
+                "appointment_id": str(appointment.id),
+                "patient_id": str(appointment.patient_id),
+                "cancelled_by": cancelled_by,
+                "reason": reason,
+            },
+        )
 
         return appointment
 

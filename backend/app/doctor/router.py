@@ -19,6 +19,8 @@ from app.db.models import User
 from app.schemas.envelope import Envelope
 from app.shared.exceptions import NotFoundException, ForbiddenException
 from app.doctor import service
+from app.appointment.schemas import AppointmentResponse
+from app.appointment.service import appointment_service
 from app.doctor.schemas import (
     AISessionBriefResponse,
     ClinicalNoteCreate,
@@ -44,6 +46,8 @@ from app.db.models import (
     Allergy,
     ChronicCondition,
     ConsentRequest,
+    DoctorSchedule,
+    DoctorTimeOff,
     Facility,
     MedicalRecord,
     Medication,
@@ -87,9 +91,14 @@ class PatientOverview(BaseModel):
     id: uuid.UUID
     medical_record_number: str
     full_name: str
+    national_identifier: str | None = None
     date_of_birth: date | None = None
     gender: str | None = None
     blood_type: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    emergency_contact_name: str | None = None
+    emergency_contact_phone: str | None = None
     allergies: list[AllergySummaryResponse]
     conditions: list[ChronicConditionSummaryResponse]
     current_medications: list[dict]
@@ -301,6 +310,127 @@ async def search_patients(
 
 
 @router.get(
+    "/schedule",
+    response_model=Envelope[dict],
+    summary="Get doctor schedule configuration",
+)
+async def get_doctor_schedule_config(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_doctor),
+) -> Envelope[dict]:
+    """Return the doctor's weekly schedule configuration and time-off requests."""
+
+    doctor_id = await _resolve_doctor_id(db, current_user.id)
+
+    # Query schedule rows
+    schedule_result = await db.execute(
+        select(DoctorSchedule).where(DoctorSchedule.doctor_id == doctor_id)
+    )
+    schedules = list(schedule_result.scalars().all())
+
+    # Query time-off requests
+    to_result = await db.execute(
+        select(DoctorTimeOff)
+        .where(DoctorTimeOff.doctor_id == doctor_id)
+        .order_by(DoctorTimeOff.start_date.desc())
+    )
+    time_offs = list(to_result.scalars().all())
+
+    # Build days array
+    days = []
+    working_days = []
+    start_times = []
+    end_times = []
+    max_appointments_list = []
+    slot_durations = []
+
+    for s in schedules:
+        days.append({
+            "day_of_week": s.day_of_week,
+            "is_working": s.is_working_day,
+            "start_time": s.start_time.strftime("%H:%M") if s.start_time else "09:00",
+            "end_time": s.end_time.strftime("%H:%M") if s.end_time else "17:00",
+            "max_appointments": s.max_daily_appointments,
+            "slot_duration_minutes": s.default_slot_duration,
+        })
+        if s.is_working_day:
+            working_days.append(s.day_of_week)
+            start_times.append(s.start_time)
+            end_times.append(s.end_time)
+            max_appointments_list.append(s.max_daily_appointments)
+            slot_durations.append(s.default_slot_duration)
+
+    # Compute aggregates
+    daily_start = min(start_times).strftime("%H:%M") if start_times else "09:00"
+    daily_end = max(end_times).strftime("%H:%M") if end_times else "17:00"
+    max_daily_appts = max(max_appointments_list) if max_appointments_list else 20
+    default_slot = slot_durations[0] if slot_durations else 30
+
+    # Build time_off_requests
+    time_off_requests = [
+        {
+            "id": str(t.id),
+            "doctor_id": str(t.doctor_id),
+            "start_date": t.start_date.isoformat(),
+            "end_date": t.end_date.isoformat(),
+            "type": t.type,
+            "reason": t.reason,
+            "status": t.status,
+            "requested_at": t.created_at.isoformat() if t.created_at else None,
+        }
+        for t in time_offs
+    ]
+
+    return Envelope.ok({
+        "id": str(doctor_id),
+        "doctor_id": str(doctor_id),
+        "working_days": working_days,
+        "daily_start_time": daily_start,
+        "daily_end_time": daily_end,
+        "max_daily_appointments": max_daily_appts,
+        "default_slot_duration_minutes": default_slot,
+        "buffer_minutes": 5,
+        "time_off_requests": time_off_requests,
+        "appointments": [],
+        "days": days,
+    })
+
+
+@router.get(
+    "/appointments/today",
+    response_model=Envelope[list[dict]],
+    summary="Get doctor's appointments for today",
+)
+async def get_doctor_appointments_today(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_doctor),
+) -> Envelope[list[dict]]:
+    """Return today's confirmed and pending appointments for the logged-in doctor."""
+
+    doctor_id = await _resolve_doctor_id(db, current_user.id)
+    appointments = await appointment_service.get_doctor_schedule(
+        db, doctor_id, query_date=date.today()
+    )
+    return Envelope.ok([
+        {
+            "id": str(a.id),
+            "patient_id": str(a.patient_id) if a.patient_id else None,
+            "patient_name": (
+                f"{a.patient.user.first_name} {a.patient.user.last_name}"
+                if a.patient and a.patient.user else None
+            ),
+            "start_time": a.allocated_start_time.strftime("%H:%M") if a.allocated_start_time else "00:00",
+            "end_time": a.allocated_end_time.strftime("%H:%M") if a.allocated_end_time else "00:00",
+            "duration_minutes": a.desired_duration_minutes,
+            "status": a.status,
+            "reason": a.reason,
+            "visit_id": str(a.visit_id) if a.visit_id else None,
+        }
+        for a in appointments
+    ])
+
+
+@router.get(
     "/{visit_id}",
     response_model=Envelope[VisitWithDetailsResponse],
     summary="Get consultation details",
@@ -402,6 +532,23 @@ async def cancel_consultation(
     return Envelope.ok(service._visit_response(visit))
 
 
+@router.patch(
+    "/{visit_id}/transcript",
+    response_model=Envelope[VisitResponse],
+    summary="Update visit transcript",
+    description="Append or overwrite the transcript for a given visit.",
+)
+async def update_visit_transcript(
+    visit_id: uuid.UUID,
+    body: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_doctor),
+) -> Envelope[VisitResponse]:
+    doctor_id = await _resolve_doctor_id(db, current_user.id)
+    visit = await service.update_visit_transcript(db, visit_id, doctor_id, body)
+    return Envelope.ok(service._visit_response(visit))
+
+
 # ---------------------------------------------------------------------------
 # Patient overview
 # ---------------------------------------------------------------------------
@@ -474,9 +621,14 @@ async def get_patient_overview(
             id=patient.id,
             medical_record_number=patient.medical_record_number,
             full_name=f"{patient.user.first_name or ''} {patient.user.last_name or ''}".strip(),
+            national_identifier=patient.national_identifier,
             date_of_birth=patient.date_of_birth,
             gender=patient.gender,
             blood_type=patient.blood_type,
+            phone=patient.user.phone_number if patient.user else None,
+            email=patient.user.email if patient.user else None,
+            emergency_contact_name=patient.emergency_contact_name,
+            emergency_contact_phone=patient.emergency_contact_phone,
             allergies=allergies,
             conditions=conditions,
             current_medications=current_medications,
