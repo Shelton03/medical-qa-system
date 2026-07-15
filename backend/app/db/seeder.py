@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -27,6 +27,7 @@ from app.db.models import (
     Notification,
     AuditLog,
     AISession,
+    DoctorSchedule,
 )
 
 DEMO_DOCTOR_EMAIL = "dr.sarah.mirage@mirage.health"
@@ -536,6 +537,19 @@ async def seed_demo_data(db: AsyncSession) -> None:
             facility_id=facility.id,
         )
         doctors.append(doctor)
+        for day in range(5):  # Monday=0 through Friday=4
+            schedule = DoctorSchedule(
+                id=uuid.uuid4(),
+                doctor_id=doctor.id,
+                day_of_week=day,
+                start_time=time(8, 0),
+                end_time=time(17, 0),
+                max_appointments=20,
+                slot_duration_minutes=30,
+                is_active=True,
+            )
+            db.add(schedule)
+        await db.flush()
 
     # Seed patients
     patients = []

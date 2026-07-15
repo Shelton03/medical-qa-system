@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.3] - 2026-07-15
+
+### Fixed
+
+#### Admin Portal Login Page Blocked
+- **Symptom:** `/admin/login` showed "Redirecting..." indefinitely because the admin layout's auth redirect fired for all pages including the login page.
+- **Root Cause:** The `AdminLayout` component unconditionally redirected unauthenticated users to `/admin/login`, even when they were already on the login page. This created a redirect loop.
+- **Fix:** Added a `usePathname` check in `AdminLayout` to skip auth enforcement on the `/admin/login` page. When on the login page, children are rendered without the sidebar.
+- **Files:** `frontend/app/admin/layout.tsx`
+
+#### Consultation Start — 500 Internal Server Error
+- **Symptom:** `POST /api/v1/doctor` (start consultation) returned 500 with `InvalidRequestError: A transaction is already begun on this Session`.
+- **Root Cause:** `start_consultation()` in `doctor/service.py` used `async with db.begin()` inside a session already managed by FastAPI's `get_db()` dependency. `get_db()` yields a session with an active transaction and auto-commits at the end. Nesting a second `begin()` is not allowed.
+- **Fix:** Removed `async with db.begin()` wrapper. The function now calls `await db.flush()` after creating the visit to sync state before the audit log write. The outer `get_db()` dependency handles the final commit.
+- **Files:** `backend/app/doctor/service.py`, `backend/app/patient/service.py` (same pattern)
+
+#### Booking — "No doctor is available"
+- **Symptom:** Patient booking wizard on Step 4 showed "No doctor is available for the selected date" even when doctors exist.
+- **Root Cause:** The auto-routing algorithm looks up `DoctorSchedule` records to find available doctors. The seeder created doctors but never created their schedules.
+- **Fix:** Added `DoctorSchedule` seeding to `backend/app/db/seeder.py`. Each seeded doctor gets Mon-Fri schedules with default working hours (08:00–17:00), 30-min slots, max 20 appointments/day.
+- **Files:** `backend/app/db/seeder.py`
+
+### Changed
+
+- **`.gitignore`** — Added `backend/models/` and model file extensions (`*.bin`, `*.gguf`, `*.pt`, etc.) to prevent large model files from being committed.
+- Removed `backend/models/ggml-tiny.bin` from git tracking.
+
+---
+
 ## [1.0.2] - 2026-07-11
 
 ### Summary

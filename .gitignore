@@ -4,3 +4,13 @@ __pycache__/
 *.log
 .next/
 backend.log
+
+# Model files (downloaded at runtime)
+backend/models/
+*.bin
+*.gguf
+*.pt
+*.pth
+*.safetensors
+*.onnx
+

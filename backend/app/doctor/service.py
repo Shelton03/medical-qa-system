@@ -81,26 +81,26 @@ async def start_consultation(
             "Medical record not found for patient.", error_code="RECORD_NOT_FOUND"
         )
 
-    async with db.begin():
-        visit = await repository.create_visit(
-            db,
-            medical_record_id=medical_record_id,
-            doctor_id=doctor_id,
-            facility_id=data.facility_id,
-            chief_complaint=data.chief_complaint,
-            reason=data.reason,
-        )
-        await _write_audit_log(
-            db,
-            user_id=doctor_id,
-            action="CONSULTATION_STARTED",
-            resource_type="Visit",
-            resource_id=visit.id,
-            metadata={
-                "patient_id": str(data.patient_id),
-                "chief_complaint": data.chief_complaint,
-            },
-        )
+    visit = await repository.create_visit(
+        db,
+        medical_record_id=medical_record_id,
+        doctor_id=doctor_id,
+        facility_id=data.facility_id,
+        chief_complaint=data.chief_complaint,
+        reason=data.reason,
+    )
+    await db.flush()
+    await _write_audit_log(
+        db,
+        user_id=doctor_id,
+        action="CONSULTATION_STARTED",
+        resource_type="Visit",
+        resource_id=visit.id,
+        metadata={
+            "patient_id": str(data.patient_id),
+            "chief_complaint": data.chief_complaint,
+        },
+    )
     await emit_ws_event(
         f"patient:{data.patient_id}",
         WSEventType.CONSULTATION_STARTED,
@@ -196,17 +196,17 @@ async def complete_consultation(
             f"Cannot complete a visit with status {visit.status}."
         )
 
-    async with db.begin():
-        visit = await repository.update_visit_status(db, visit_id, "completed")
-        if not visit:
-            raise NotFoundException("Visit not found.", error_code="VISIT_NOT_FOUND")
-        await _write_audit_log(
-            db,
-            user_id=doctor_id,
-            action="CONSULTATION_COMPLETED",
-            resource_type="Visit",
-            resource_id=visit.id,
-        )
+    visit = await repository.update_visit_status(db, visit_id, "completed")
+    if not visit:
+        raise NotFoundException("Visit not found.", error_code="VISIT_NOT_FOUND")
+    await db.flush()
+    await _write_audit_log(
+        db,
+        user_id=doctor_id,
+        action="CONSULTATION_COMPLETED",
+        resource_type="Visit",
+        resource_id=visit.id,
+    )
     if visit.medical_record:
         await emit_ws_event(
             f"patient:{visit.medical_record.patient_id}",
@@ -253,17 +253,17 @@ async def cancel_consultation(
             f"Cannot cancel a visit with status {visit.status}."
         )
 
-    async with db.begin():
-        visit = await repository.update_visit_status(db, visit_id, "cancelled")
-        if not visit:
-            raise NotFoundException("Visit not found.", error_code="VISIT_NOT_FOUND")
-        await _write_audit_log(
-            db,
-            user_id=doctor_id,
-            action="CONSULTATION_CANCELLED",
-            resource_type="Visit",
-            resource_id=visit.id,
-        )
+    visit = await repository.update_visit_status(db, visit_id, "cancelled")
+    if not visit:
+        raise NotFoundException("Visit not found.", error_code="VISIT_NOT_FOUND")
+    await db.flush()
+    await _write_audit_log(
+        db,
+        user_id=doctor_id,
+        action="CONSULTATION_CANCELLED",
+        resource_type="Visit",
+        resource_id=visit.id,
+    )
     return visit
 
 

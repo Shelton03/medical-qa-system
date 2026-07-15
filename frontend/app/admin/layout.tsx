@@ -34,14 +34,17 @@ export default function AdminLayout({
 }): React.ReactElement {
   const { user, isLoading, isAuthenticated, logout } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const isLoginPage = pathname === "/admin/login";
 
   useEffect(() => {
+    if (isLoginPage) return;
     if (!isLoading && (!isAuthenticated || user?.role !== "admin")) {
       router.replace("/admin/login");
     }
-  }, [isLoading, isAuthenticated, user, router]);
+  }, [isLoading, isAuthenticated, user, router, isLoginPage]);
 
-  if (isLoading) {
+  if (isLoading && !isLoginPage) {
     return (
       <div className="min-h-screen bg-stellarWhite flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-celestialBlue border-t-transparent rounded-full animate-spin" />
@@ -49,12 +52,17 @@ export default function AdminLayout({
     );
   }
 
-  if (!isAuthenticated || user?.role !== "admin") {
+  if (!isAuthenticated && !isLoginPage) {
     return (
       <div className="min-h-screen bg-stellarWhite flex items-center justify-center">
         <p className="text-clinicalGrey text-sm">Redirecting...</p>
       </div>
     );
+  }
+
+  // On login page, render children without admin sidebar
+  if (isLoginPage) {
+    return <>{children}</>;
   }
 
   return (

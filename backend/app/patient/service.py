@@ -61,36 +61,36 @@ async def get_patient_profile(
 
 async def register_patient(db: AsyncSession, data: PatientCreate) -> PatientResponse:
     """Create a new patient, linked user, and medical record in a transaction."""
-    async with db.begin():
-        user = User(
-            id=uuid.uuid4(),
-            email=f"{data.national_id}@mirage.local",
-            password_hash=hash_password(uuid.uuid4().hex),
-            role="patient",
-            first_name=data.first_name,
-            last_name=data.last_name,
-            phone_number=data.phone,
-            is_active=True,
-        )
-        db.add(user)
-        await db.flush()
+    user = User(
+        id=uuid.uuid4(),
+        email=f"{data.national_id}@mirage.local",
+        password_hash=hash_password(uuid.uuid4().hex),
+        role="patient",
+        first_name=data.first_name,
+        last_name=data.last_name,
+        phone_number=data.phone,
+        is_active=True,
+    )
+    db.add(user)
+    await db.flush()
 
-        patient = await repository.create_patient(db, data, user.id)
+    patient = await repository.create_patient(db, data, user.id)
 
-        record = MedicalRecord(
-            id=uuid.uuid4(),
-            patient_id=patient.id,
-            record_status="active",
-        )
-        db.add(record)
-        await db.flush()
+    record = MedicalRecord(
+        id=uuid.uuid4(),
+        patient_id=patient.id,
+        record_status="active",
+    )
+    db.add(record)
+    await db.flush()
 
-        result = await db.execute(
-            select(Patient)
-            .options(joinedload(Patient.user))
-            .where(Patient.id == patient.id)
-        )
-        patient = result.unique().scalar_one()
+    result = await db.execute(
+        select(Patient)
+        .options(joinedload(Patient.user))
+        .where(Patient.id == patient.id)
+    )
+    patient = result.unique().scalar_one()
+    await db.flush()
 
     return _to_response(patient)
 
@@ -107,11 +107,11 @@ async def update_patient_record(
     if requesting_user.role not in ("doctor", "admin"):
         raise ForbiddenException("Insufficient permissions.")
 
-    async with db.begin():
-        patient = await repository.update_patient(db, patient_id, data)
-        if not patient:
-            raise NotFoundException("Patient not found.", error_code="PATIENT_NOT_FOUND")
-        response = _to_response(patient)
+    patient = await repository.update_patient(db, patient_id, data)
+    if not patient:
+        raise NotFoundException("Patient not found.", error_code="PATIENT_NOT_FOUND")
+    response = _to_response(patient)
+    await db.flush()
 
     # Emit real-time events after successful commit
     await emit_ws_event(
