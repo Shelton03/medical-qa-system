@@ -34,6 +34,12 @@ class AIMessageResponse(BaseModel):
     session_id: UUID
     role: str
     content: str
+    message_type: str | None = None
+    response_metadata: dict | None = None
+    confidence_level: str | None = None
+    risk_flags: list[str] | None = None
+    explanation: str | None = None
+    disclaimer: str | None = None
     token_count: int | None = None
     created_at: datetime
 

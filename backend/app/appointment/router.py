@@ -13,13 +13,15 @@ from sqlalchemy.orm import selectinload
 
 from app.auth.dependencies import get_current_user, get_current_patient, get_current_doctor, require_role
 from app.core.database import get_db
-from app.db.models import User, Appointment, Doctor, DoctorSchedule, DoctorTimeOff, Facility
+from app.db.models import User, Patient, Appointment, Doctor, DoctorSchedule, DoctorTimeOff, Facility
 from app.appointment.service import appointment_service
 from app.appointment.schemas import (
     AppointmentCreateRequest,
     AppointmentCancelRequest,
     AppointmentResponse,
     AppointmentListResponse,
+    AppointmentAdminItemResponse,
+    AdminAppointmentListResponse,
     DoctorScheduleCreate,
     DoctorScheduleResponse,
     TimeOffRequest,
@@ -45,7 +47,7 @@ async def list_consultations_alias(
     """Patient-friendly alias for listing consultations (visits)."""
     from app.doctor import service as doctor_service
     from app.doctor.router import _resolve_patient_id, _resolve_doctor_id
-    
+
     if current_user.role == "doctor":
         doctor_id = await _resolve_doctor_id(db, current_user.id)
         visits, _ = await doctor_service.list_visits_for_doctor(
@@ -56,7 +58,7 @@ async def list_consultations_alias(
         visits, _ = await doctor_service.list_visits_for_patient(
             db, patient_id, limit=limit, offset=offset, status=status
         )
-    
+
     return Envelope.ok([
         {
             "id": str(v.id),
@@ -90,11 +92,11 @@ async def create_appointment(
 ) -> Envelope[AppointmentResponse]:
     """Patient books an appointment."""
     from datetime import date as dt_date
-    
+
     facility_id = uuid.UUID(body.facility_id) if isinstance(body.facility_id, str) else body.facility_id
     appointment_date = dt_date.fromisoformat(body.appointment_date) if isinstance(body.appointment_date, str) else body.appointment_date
     preferred_doctor_id = uuid.UUID(body.preferred_doctor_id) if isinstance(body.preferred_doctor_id, str) else body.preferred_doctor_id
-    
+
     appointment = await appointment_service.create_booking(
         db,
         patient_id=current_user.id,  # type: ignore[arg-type]
@@ -266,7 +268,9 @@ async def list_facility_doctors(
 ) -> Envelope[list[dict]]:
     """List doctors at a specific facility."""
     result = await db.execute(
-        select(Doctor).where(
+        select(Doctor).options(
+            selectinload(Doctor.user),
+        ).where(
             Doctor.facility_id == facility_id,
             Doctor.is_accepting_appointments == True,
         )
@@ -276,7 +280,7 @@ async def list_facility_doctors(
     return Envelope.ok([
         {
             "id": str(d.id),
-            "name": f"Dr. {d.first_name} {d.last_name}".strip(),
+            "name": f"Dr. {d.user.first_name or ''} {d.user.last_name or ''}".strip() if d.user else f"Dr. {str(d.id)}",
             "specialty": d.specialty,
         }
         for d in doctors
@@ -358,6 +362,7 @@ async def admin_list_doctors(
     """List all doctors with schedule summary."""
     result = await db.execute(
         select(Doctor).options(
+            selectinload(Doctor.user),
             selectinload(Doctor.facility),
             selectinload(Doctor.schedules),
         ).offset(offset).limit(limit)
@@ -371,8 +376,8 @@ async def admin_list_doctors(
         end_times = [s.end_time for s in d.schedules if s.is_working_day]
         items.append({
             "id": str(d.id),
-            "first_name": d.first_name,
-            "last_name": d.last_name,
+            "first_name": d.user.first_name if d.user else "",
+            "last_name": d.user.last_name if d.user else "",
             "specialty": d.specialty,
             "facility_name": d.facility.name if d.facility else "—",
             "working_days": working_days,
@@ -524,9 +529,40 @@ async def admin_add_time_off(
     ))
 
 
+def _to_admin_item(a: Appointment) -> AppointmentAdminItemResponse:
+    from datetime import datetime
+    dt = None
+    if a.appointment_date and a.allocated_start_time:
+        dt = datetime.combine(a.appointment_date, a.allocated_start_time)
+
+    patient_name = "Unknown"
+    if a.patient and a.patient.user:
+        patient_name = f"{a.patient.user.first_name or ''} {a.patient.user.last_name or ''}".strip()
+
+    doctor_name = "Dr. Unknown"
+    if a.doctor and a.doctor.user:
+        doctor_name = f"{a.doctor.user.first_name or 'Dr.'} {a.doctor.user.last_name or ''}".strip()
+
+    facility_name = a.facility.name if a.facility else "—"
+
+    return AppointmentAdminItemResponse(
+        id=a.id,
+        date_time=dt,
+        patient_id=a.patient_id,
+        patient_name=patient_name,
+        doctor_id=a.doctor_id,
+        doctor_name=doctor_name,
+        facility_id=a.facility_id,
+        facility_name=facility_name,
+        status=a.status,
+        priority=a.priority or "NORMAL",
+        reason=a.reason,
+    )
+
+
 @router.get(
     "/admin/appointments",
-    response_model=Envelope[AppointmentListResponse],
+    response_model=Envelope[AdminAppointmentListResponse],
     summary="List all appointments (admin)",
 )
 async def admin_list_appointments(
@@ -538,7 +574,7 @@ async def admin_list_appointments(
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
-) -> Envelope[AppointmentListResponse]:
+) -> Envelope[AdminAppointmentListResponse]:
     """List all appointments with filters. Admin only."""
     query = select(Appointment)
     
@@ -559,9 +595,9 @@ async def admin_list_appointments(
     query = (
         query
         .options(
-            selectinload(Appointment.doctor),
+            selectinload(Appointment.doctor).selectinload(Doctor.user),
+            selectinload(Appointment.patient).selectinload(Patient.user),
             selectinload(Appointment.facility),
-            selectinload(Appointment.patient),
         )
         .order_by(Appointment.appointment_date.desc(), Appointment.allocated_start_time.asc())
         .offset(offset)
@@ -572,8 +608,8 @@ async def admin_list_appointments(
     appointments = result.scalars().all()
     
     return Envelope.ok(
-        AppointmentListResponse(
-            items=[_to_response(a) for a in appointments],
+        AdminAppointmentListResponse(
+            items=[_to_admin_item(a) for a in appointments],
             total=total,
             limit=limit,
             offset=offset,
@@ -688,5 +724,3 @@ def _to_response(appointment) -> AppointmentResponse:
         preferred_doctor_id=appointment.preferred_doctor_id,
         created_at=appointment.created_at,
     )
-
-

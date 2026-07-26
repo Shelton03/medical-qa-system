@@ -6,6 +6,7 @@ mkdir -p "$MODELS_DIR"
 
 # Download Gemma 3 4B Q4_K_M if missing
 GEMMA_FILE="$MODELS_DIR/gemma-3-4b-it-Q4_K_M.gguf"
+GEMMA_REPO_FILE="google_gemma-3-4b-it-Q4_K_M.gguf"
 if [ ! -f "$GEMMA_FILE" ]; then
     echo "=========================================="
     echo "Downloading Gemma 3 4B Q4_K_M (~2.5GB)..."
@@ -13,9 +14,13 @@ if [ ! -f "$GEMMA_FILE" ]; then
     echo "=========================================="
     huggingface-cli download \
         bartowski/google_gemma-3-4b-it-GGUF \
-        --include "gemma-3-4b-it-Q4_K_M.gguf" \
+        --include "$GEMMA_REPO_FILE" \
         --local-dir "$MODELS_DIR" \
         --local-dir-use-symlinks False
+    # Create symlink to the expected name
+    if [ -f "$MODELS_DIR/$GEMMA_REPO_FILE" ]; then
+        ln -s "$MODELS_DIR/$GEMMA_REPO_FILE" "$GEMMA_FILE"
+    fi
     echo "Gemma 3 download complete."
 else
     echo "Gemma 3 model already present."
@@ -38,4 +43,4 @@ fi
 
 # Start uvicorn
 echo "Starting Mirage backend..."
-exec uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+exec uvicorn main:app --host 0.0.0.0 --port 8000 --reload --log-config ./uvicorn_log_config.json

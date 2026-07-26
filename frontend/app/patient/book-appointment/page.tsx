@@ -11,7 +11,7 @@ import { Step3Symptoms } from "@/components/patient/booking/Step3Symptoms";
 import { Step4Confirm } from "@/components/patient/booking/Step4Confirm";
 import { useCreateAppointment } from "@/hooks/useAppointments";
 import { useToast } from "@/hooks/useToast";
-import type { Facility, AppointmentPriority } from "@/lib/types";
+import type { Facility, AppointmentPriority, AppointmentResponse } from "@/lib/types";
 
 const TOTAL_STEPS = 4;
 
@@ -32,6 +32,7 @@ export default function BookAppointmentPage(): React.ReactElement {
   const [priority, setPriority] = useState<AppointmentPriority>("NORMAL");
 
   const [isSuccess, setIsSuccess] = useState(false);
+  const [createdAppointment, setCreatedAppointment] = useState<AppointmentResponse | null>(null);
 
   const canProceed = useCallback(() => {
     switch (step) {
@@ -71,7 +72,7 @@ export default function BookAppointmentPage(): React.ReactElement {
     if (!facility || !selectedDate) return;
 
     try {
-      await createMutation.mutateAsync({
+      const response = await createMutation.mutateAsync({
         facility_id: facility.id,
         appointment_date: selectedDate,
         symptoms: symptoms.trim(),
@@ -79,6 +80,7 @@ export default function BookAppointmentPage(): React.ReactElement {
         duration_minutes: duration,
         priority,
       });
+      setCreatedAppointment(response);
       setIsSuccess(true);
       showToast({
         title: "Appointment Confirmed",
@@ -215,8 +217,10 @@ export default function BookAppointmentPage(): React.ReactElement {
                 reason={reason}
                 duration={duration}
                 priority={priority}
-                doctorName={null}
-                doctorSpecialty={null}
+                doctorName={createdAppointment?.doctor_name ?? null}
+                doctorSpecialty={createdAppointment?.doctor_specialty ?? null}
+                allocatedStartTime={createdAppointment?.allocated_start_time ?? null}
+                allocatedEndTime={createdAppointment?.allocated_end_time ?? null}
                 isSubmitting={createMutation.isPending}
                 isSuccess={isSuccess}
                 onConfirm={handleConfirm}

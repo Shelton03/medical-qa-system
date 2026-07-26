@@ -50,7 +50,12 @@ async def create_visit(
     db.add(visit)
     await db.flush()
     await db.refresh(visit)
-    return visit
+    result = await db.execute(
+        select(Visit)
+        .options(selectinload(Visit.medical_record))
+        .where(Visit.id == visit.id)
+    )
+    return result.scalar_one()
 
 
 async def get_visit_by_id(db: AsyncSession, visit_id: uuid.UUID) -> Visit | None:

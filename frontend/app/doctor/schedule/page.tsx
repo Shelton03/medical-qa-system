@@ -3,16 +3,13 @@
 import React from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
 import {
   CalendarDays,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   Stethoscope,
   ArrowRight,
 } from "lucide-react";
-import { useMySchedule, useMyAppointmentsToday } from "@/hooks/useSchedule";
+import { useMySchedule, useMyAppointments } from "@/hooks/useSchedule";
 import { LoadingSkeleton } from "@/components/ui/LoadingSkeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { ScheduleAppointment } from "@/lib/types";
@@ -78,13 +75,31 @@ function AppointmentBlock({
 
 export default function DoctorSchedulePage(): React.ReactElement {
   const { data: scheduleData, isLoading: scheduleLoading } = useMySchedule();
-  const { data: todayAppointments, isLoading: apptsLoading } = useMyAppointmentsToday();
+  const { data: allAppointments, isLoading: apptsLoading } = useMyAppointments();
 
   const isLoading = scheduleLoading || apptsLoading;
 
   // Get today's day index (0=Sun, 1=Mon... convert to 0=Mon for our display)
   const today = new Date();
   const todayDayIndex = (today.getDay() + 6) % 7; // Convert to Mon=0
+  const weekStart = new Date(today);
+  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(today.getDate() - todayDayIndex);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 7);
+
+  const appointmentDate = (value: string): Date => new Date(`${value}T00:00:00`);
+  const weekAppointments = allAppointments?.filter((appt) => {
+    if (!appt.appointment_date) return false;
+    const date = appointmentDate(appt.appointment_date);
+    return date >= weekStart && date < weekEnd;
+  });
+
+  const todayAppts = weekAppointments?.filter((appt) => {
+    if (!appt.appointment_date) return false;
+    const apptDate = appointmentDate(appt.appointment_date);
+    return apptDate.toDateString() === today.toDateString();
+  });
 
   return (
     <div className="space-y-6">
@@ -174,9 +189,15 @@ export default function DoctorSchedulePage(): React.ReactElement {
                       dayIdx === todayDayIndex ? "bg-celestialBlue/[0.02]" : ""
                     )}
                   >
-                    {/* Render today's appointments */}
-                    {dayIdx === todayDayIndex &&
-                      todayAppointments?.map((appt) => (
+                    {/* Render appointments for this day */}
+                    {weekAppointments
+                      ?.filter((appt) => {
+                        if (!appt.appointment_date) return false;
+                        const apptDate = appointmentDate(appt.appointment_date);
+                        const apptDayIndex = (apptDate.getDay() + 6) % 7; // Convert to Mon=0
+                        return apptDayIndex === dayIdx;
+                      })
+                      .map((appt) => (
                         <AppointmentBlock
                           key={appt.id}
                           appt={appt}
@@ -204,9 +225,9 @@ export default function DoctorSchedulePage(): React.ReactElement {
               <CalendarDays className="w-4 h-4" />
               Today&apos;s Appointments
             </h2>
-            {todayAppointments && todayAppointments.length > 0 ? (
+            {todayAppts && todayAppts.length > 0 ? (
               <div className="space-y-2">
-                {todayAppointments.map((appt) => (
+                {todayAppts.map((appt) => (
                   <div
                     key={appt.id}
                     className="flex items-center justify-between p-3 bg-stellarWhite rounded-lg border border-border"

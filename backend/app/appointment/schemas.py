@@ -86,6 +86,31 @@ class AppointmentResponse(BaseModel):
     created_at: datetime
 
 
+class AppointmentAdminItemResponse(BaseModel):
+    """Rich appointment data for admin table view."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    date_time: datetime
+    patient_id: uuid.UUID
+    patient_name: str
+    doctor_id: Optional[uuid.UUID] = None
+    doctor_name: str
+    facility_id: uuid.UUID
+    facility_name: str
+    status: str
+    priority: str
+    reason: Optional[str] = None
+
+
+class AdminAppointmentListResponse(BaseModel):
+    model_config = ConfigDict(strict=True)
+    items: list[AppointmentAdminItemResponse]
+    total: int
+    limit: int
+    offset: int
+
+
 class AppointmentListResponse(BaseModel):
     model_config = ConfigDict(strict=True)
 

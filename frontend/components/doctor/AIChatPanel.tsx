@@ -2,11 +2,11 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Loader2, User, Bot, Sparkles, Mic } from "lucide-react";
+import { Send, Loader2, User, Bot, Sparkles, Mic, HelpCircle } from "lucide-react";
 import { aiApi, doctorApi } from "@/lib/api";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
 import { useToast } from "@/hooks/useToast";
-import type { AIMessageResponse } from "@/lib/types";
+import type { AIMessageResponse, AIMessageStreamChunk } from "@/lib/types";
 
 interface AIChatPanelProps {
   sessionId: string;
@@ -60,7 +60,10 @@ export function AIChatPanel({
   const { showToast } = useToast();
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const target = messagesEndRef.current;
+    if (target && typeof target.scrollIntoView === "function") {
+      target.scrollIntoView({ behavior: "smooth" });
+    }
   }, []);
 
   useEffect(() => {
@@ -95,9 +98,25 @@ export function AIChatPanel({
 
       try {
         const streamBuffer: string[] = [];
-        await aiApi.sendMessageStream(sessionId, trimmed, (chunk) => {
-          streamBuffer.push(chunk);
-          setStreamingContent(streamBuffer.join(""));
+        const meta: Partial<
+          Pick<
+            AIMessageResponse,
+            "message_type" | "confidence_level" | "risk_flags" | "explanation" | "disclaimer"
+          >
+        > = {};
+
+        await aiApi.sendMessageStream(sessionId, trimmed, (chunk: AIMessageStreamChunk) => {
+          if (chunk.token) {
+            streamBuffer.push(chunk.token);
+            setStreamingContent(streamBuffer.join(""));
+          }
+          if (chunk.message_type || chunk.type) {
+            meta.message_type = chunk.message_type ?? chunk.type;
+          }
+          if (chunk.confidence_level) meta.confidence_level = chunk.confidence_level;
+          if (chunk.risk_flags) meta.risk_flags = chunk.risk_flags;
+          if (chunk.explanation) meta.explanation = chunk.explanation;
+          if (chunk.disclaimer) meta.disclaimer = chunk.disclaimer;
         });
 
         const fullContent = streamBuffer.join("");
@@ -112,6 +131,7 @@ export function AIChatPanel({
               model_name: null,
               token_count: null,
               created_at: new Date().toISOString(),
+              ...meta,
             },
           ]);
         }
@@ -200,7 +220,7 @@ export function AIChatPanel({
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-mirageBlack">AI Clinical Assistant</p>
           <p className="text-[11px] text-clinicalGrey">
-            {patientId ? `Patient session #${sessionId.slice(0, 8)}` : `Session #${sessionId.slice(0, 8)}`}
+            {patientId ? `Patient session #${sessionId}` : `Session #${sessionId}`}
           </p>
         </div>
         {recording && (
@@ -235,7 +255,64 @@ export function AIChatPanel({
                     : "bg-secondary text-mirageBlack rounded-bl-md"
                 }`}
               >
-                {msg.content}
+                {msg.role === "assistant" && msg.message_type === "question" && (
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-semibold">
+                      <HelpCircle className="w-3 h-3" />
+                      Follow-up Question
+                    </span>
+                  </div>
+                )}
+
+                {msg.role === "assistant" && msg.message_type === "answer" ? (
+                  <p className="text-base font-medium">{msg.content}</p>
+                ) : (
+                  msg.content
+                )}
+
+                {msg.role === "assistant" && msg.message_type === "answer" && (
+                  <>
+                    {msg.confidence_level && (
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold mt-2 ${
+                          msg.confidence_level.toLowerCase().includes("high")
+                            ? "bg-green-100 text-green-700"
+                            : msg.confidence_level.toLowerCase().includes("medium")
+                            ? "bg-yellow-100 text-yellow-700"
+                            : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        {msg.confidence_level} Confidence
+                      </span>
+                    )}
+                    {msg.risk_flags && msg.risk_flags.length > 0 && (
+                      <div className="mt-2 p-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-1.5">
+                        <span className="shrink-0">⚠️</span>
+                        <span>
+                          <span className="font-semibold">Risk Flags:</span>{" "}
+                          {msg.risk_flags.join(", ")}
+                        </span>
+                      </div>
+                    )}
+                    {msg.explanation && (
+                      <details className="mt-2 group">
+                        <summary className="text-xs font-medium text-clinicalGrey cursor-pointer hover:text-mirageBlack list-none flex items-center gap-1">
+                          <span className="inline-block w-3">▶</span>
+                          Explanation
+                        </summary>
+                        <p className="mt-1 text-xs text-mirageBlack/80 leading-relaxed pl-4">
+                          {msg.explanation}
+                        </p>
+                      </details>
+                    )}
+                    {msg.disclaimer && (
+                      <p className="mt-2 text-[11px] text-clinicalGrey italic">
+                        {msg.disclaimer}
+                      </p>
+                    )}
+                  </>
+                )}
+
                 {msg.role === "assistant" && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     <SuggestionChip onClick={() => handleSuggestion("Can you explain your reasoning?")}>
@@ -286,7 +363,7 @@ export function AIChatPanel({
                 <Loader2 className="w-3.5 h-3.5 text-celestialBlue animate-spin" />
               </div>
               <div className="px-4 py-2.5 rounded-2xl rounded-bl-md bg-secondary text-clinicalGrey text-sm flex items-center gap-2">
-                <span>AI is thinking</span>
+                <span>Analyzing symptoms...</span>
                 <span className="flex gap-0.5">
                   <span className="w-1 h-1 bg-clinicalGrey rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
                   <span className="w-1 h-1 bg-clinicalGrey rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
@@ -320,7 +397,7 @@ export function AIChatPanel({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={recording ? "Recording… speak now" : "Ask the AI assistant…"}
+            placeholder={recording ? "Recording… speak now" : "Ask the AI assistant..."}
             rows={1}
             className={`flex-1 min-h-[40px] max-h-32 px-3 py-2.5 rounded-input text-sm transition-colors resize-none scrollbar-thin ${
               recording

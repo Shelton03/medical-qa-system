@@ -18,6 +18,13 @@ export function useMyAppointmentsToday() {
   });
 }
 
+export function useMyAppointments() {
+  return useQuery({
+    queryKey: ["doctor", "appointments", "all"],
+    queryFn: () => scheduleApi.getMyAppointments(),
+  });
+}
+
 export function useUpdateAppointmentStatus() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -26,6 +33,7 @@ export function useUpdateAppointmentStatus() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["doctor", "schedule"] });
       queryClient.invalidateQueries({ queryKey: ["doctor", "appointments", "today"] });
+      queryClient.invalidateQueries({ queryKey: ["doctor", "appointments", "all"] });
     },
   });
 }

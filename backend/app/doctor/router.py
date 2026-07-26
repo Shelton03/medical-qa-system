@@ -43,7 +43,10 @@ from app.patient.schemas import (
 )
 from app.notifications import service as notification_service
 from app.db.models import (
+    AIMessage,
+    AISession,
     Allergy,
+    Appointment,
     ChronicCondition,
     ConsentRequest,
     DoctorSchedule,
@@ -431,6 +434,55 @@ async def get_doctor_appointments_today(
 
 
 @router.get(
+    "/appointments",
+    response_model=Envelope[list[dict]],
+    summary="Get doctor's upcoming appointments",
+)
+async def get_doctor_appointments(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_doctor),
+) -> Envelope[list[dict]]:
+    """Return all upcoming confirmed/pending appointments for the logged-in doctor."""
+    from datetime import date
+
+    doctor_id = await _resolve_doctor_id(db, current_user.id)
+
+    result = await db.execute(
+        select(Appointment)
+        .where(
+            Appointment.doctor_id == doctor_id,
+            Appointment.appointment_date >= date.today(),
+            Appointment.status.in_(["PENDING", "CONFIRMED"]),
+        )
+        .options(
+            selectinload(Appointment.patient).selectinload(Patient.user),
+            selectinload(Appointment.facility),
+        )
+        .order_by(Appointment.appointment_date, Appointment.allocated_start_time)
+    )
+    appointments = result.unique().scalars().all()
+
+    return Envelope.ok([
+        {
+            "id": str(a.id),
+            "patient_id": str(a.patient_id) if a.patient_id else None,
+            "patient_name": (
+                f"{a.patient.user.first_name} {a.patient.user.last_name}"
+                if a.patient and a.patient.user else None
+            ),
+            "start_time": a.allocated_start_time.strftime("%H:%M") if a.allocated_start_time else "00:00",
+            "end_time": a.allocated_end_time.strftime("%H:%M") if a.allocated_end_time else "00:00",
+            "appointment_date": a.appointment_date.isoformat() if a.appointment_date else None,
+            "duration_minutes": a.desired_duration_minutes,
+            "status": a.status,
+            "reason": a.reason,
+            "facility_name": a.facility.name if a.facility else None,
+        }
+        for a in appointments
+    ])
+
+
+@router.get(
     "/{visit_id}",
     response_model=Envelope[VisitWithDetailsResponse],
     summary="Get consultation details",
@@ -769,6 +821,72 @@ async def get_patient_timeline(
 
     events.sort(key=lambda e: e.date, reverse=True)
     return Envelope.ok([e.model_dump() for e in events])
+
+
+# ---------------------------------------------------------------------------
+# Patient AI sessions
+# ---------------------------------------------------------------------------
+def _ai_session_to_dict(session: AISession) -> dict:
+    return {
+        "id": str(session.id),
+        "started_at": session.started_at.isoformat(),
+        "status": session.status,
+        "assessment_done": session.assessment_done,
+        "confidence": session.confidence,
+        "gaps_remaining": session.gaps_remaining,
+        "candidate_domains": session.candidate_domains,
+        "key_symptoms": session.key_symptoms,
+        "missing_info": session.missing_info,
+        "risk_flags": session.risk_flags,
+        "messages": [
+            {
+                "id": str(m.id),
+                "role": m.role,
+                "content": m.content,
+                "message_type": getattr(m, "message_type", None),
+                "created_at": m.created_at.isoformat(),
+            }
+            for m in sorted(session.messages, key=lambda msg: msg.created_at)
+        ],
+        "appointment": {
+            "id": str(session.appointment_id),
+            "date": session.appointment.appointment_date.isoformat() if session.appointment else None,
+            "time": (
+                session.appointment.allocated_start_time.strftime("%H:%M")
+                if session.appointment and session.appointment.allocated_start_time
+                else None
+            ),
+            "status": session.appointment.status if session.appointment else None,
+        } if session.appointment else None,
+    }
+
+
+@router.get(
+    "/patient/{patient_id}/ai-sessions",
+    response_model=Envelope[list[dict]],
+    summary="Get patient's AI assessment sessions",
+    description="Return all AI session details for a patient after consent is granted.",
+)
+async def get_patient_ai_sessions(
+    patient_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_doctor),
+) -> Envelope[list[dict]]:
+    doctor_id = await _resolve_doctor_id(db, current_user.id)
+    await check_record_access(db, doctor_id, patient_id)
+
+    result = await db.execute(
+        select(AISession)
+        .options(selectinload(AISession.messages))
+        .options(selectinload(AISession.appointment))
+        .where(
+            AISession.patient_id == patient_id,
+            (AISession.doctor_id == doctor_id) | (AISession.appointment_id.is_not(None)),
+        )
+        .order_by(AISession.started_at.desc())
+    )
+    sessions = result.unique().scalars().all()
+    return Envelope.ok([_ai_session_to_dict(s) for s in sessions])
 
 
 # ---------------------------------------------------------------------------

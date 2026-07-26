@@ -26,6 +26,8 @@ interface Step4ConfirmProps {
   priority: AppointmentPriority;
   doctorName: string | null;
   doctorSpecialty: string | null;
+  allocatedStartTime?: string | null;
+  allocatedEndTime?: string | null;
   isSubmitting: boolean;
   isSuccess: boolean;
   onConfirm: () => void;
@@ -65,6 +67,8 @@ export function Step4Confirm({
   priority,
   doctorName,
   doctorSpecialty,
+  allocatedStartTime,
+  allocatedEndTime,
   isSubmitting,
   isSuccess,
   onConfirm,
@@ -72,6 +76,11 @@ export function Step4Confirm({
   const router = useRouter();
 
   if (isSuccess) {
+    const timeSlot =
+      allocatedStartTime && allocatedEndTime
+        ? `${allocatedStartTime.slice(0, 5)} – ${allocatedEndTime.slice(0, 5)}`
+        : null;
+
     return (
       <motion.div
         variants={{
@@ -82,29 +91,120 @@ export function Step4Confirm({
         initial="hidden"
         animate="visible"
         exit="exit"
-        className="flex flex-col items-center justify-center h-full px-6 text-center"
+        className="flex flex-col h-full px-4 pt-3"
       >
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 380, damping: 32 }}
-          className="w-16 h-16 rounded-full bg-healthGreen/10 flex items-center justify-center mb-4"
-        >
-          <CheckCircle2 className="w-8 h-8 text-healthGreen" />
-        </motion.div>
-        <h3 className="text-section-title font-semibold text-mirageBlack mb-2">
-          Appointment Booked!
-        </h3>
-        <p className="text-caption text-clinicalGrey max-w-[280px] mb-6">
-          Your appointment has been confirmed. You can view it in My
-          Appointments.
-        </p>
-        <button
-          onClick={() => router.push("/patient/appointments")}
-          className="px-6 py-3 bg-celestialBlue text-white rounded-button text-body font-medium hover:bg-celestialBlue-600 transition-colors min-h-[44px]"
-        >
-          Go to My Appointments
-        </button>
+        <div className="flex-1 overflow-y-auto pb-4">
+          {/* Header */}
+          <div className="flex flex-col items-center text-center mb-5">
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 380, damping: 32 }}
+              className="w-16 h-16 rounded-full bg-healthGreen/10 flex items-center justify-center mb-4"
+            >
+              <CheckCircle2 className="w-8 h-8 text-healthGreen" />
+            </motion.div>
+            <h3 className="text-section-title font-semibold text-mirageBlack mb-1">
+              Appointment Booked!
+            </h3>
+            <p className="text-caption text-clinicalGrey">
+              Your appointment has been confirmed.
+            </p>
+          </div>
+
+          {/* Confirmation card */}
+          <div className="bg-white border border-border rounded-card p-4 space-y-3 mb-3">
+            {doctorName && (
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-celestialBlue/10 flex items-center justify-center shrink-0">
+                  <Stethoscope className="w-4.5 h-4.5 text-celestialBlue" />
+                </div>
+                <div>
+                  <p className="text-caption text-clinicalGrey">Doctor</p>
+                  <p className="text-body font-medium text-mirageBlack">{doctorName}</p>
+                  {doctorSpecialty && (
+                    <p className="text-caption text-clinicalGrey">{doctorSpecialty}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-lg bg-celestialBlue/10 flex items-center justify-center shrink-0">
+                <CalendarDays className="w-4.5 h-4.5 text-celestialBlue" />
+              </div>
+              <div>
+                <p className="text-caption text-clinicalGrey">Date & Time</p>
+                <p className="text-body font-medium text-mirageBlack">{formatDateLabel(date)}</p>
+                {timeSlot && (
+                  <p className="text-body font-medium text-mirageBlack">{timeSlot}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-lg bg-celestialBlue/10 flex items-center justify-center shrink-0">
+                <MapPin className="w-4.5 h-4.5 text-celestialBlue" />
+              </div>
+              <div>
+                <p className="text-caption text-clinicalGrey">Facility</p>
+                <p className="text-body font-medium text-mirageBlack">{facilityName}</p>
+                <p className="text-caption text-clinicalGrey">{facilityCity}</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-lg bg-celestialBlue/10 flex items-center justify-center shrink-0">
+                <Clock className="w-4.5 h-4.5 text-celestialBlue" />
+              </div>
+              <div>
+                <p className="text-caption text-clinicalGrey">Duration</p>
+                <p className="text-body font-medium text-mirageBlack">{duration} minutes</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-lg bg-celestialBlue/10 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-4.5 h-4.5 text-celestialBlue" />
+              </div>
+              <div>
+                <p className="text-caption text-clinicalGrey">Priority</p>
+                <span
+                  className={cn(
+                    "inline-flex items-center px-2.5 py-0.5 rounded-full border text-micro font-medium mt-0.5",
+                    priorityColor[priority]
+                  )}
+                >
+                  {priorityLabel[priority]}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Symptoms */}
+          <div className="bg-white border border-border rounded-card p-4 mb-3">
+            <p className="text-caption font-medium text-mirageBlack mb-1.5">Symptoms</p>
+            <p className="text-body text-mirageBlack whitespace-pre-wrap">{symptoms}</p>
+          </div>
+
+          {/* Reason */}
+          {reason && (
+            <div className="bg-white border border-border rounded-card p-4">
+              <p className="text-caption font-medium text-mirageBlack mb-1">Reason</p>
+              <p className="text-body text-mirageBlack">{reason}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Go to My Appointments */}
+        <div className="shrink-0 py-3 bg-white border-t border-border">
+          <button
+            onClick={() => router.push("/patient/appointments")}
+            className="w-full py-3 bg-celestialBlue text-white rounded-button text-body font-medium hover:bg-celestialBlue-600 transition-colors min-h-[44px]"
+          >
+            Go to My Appointments
+          </button>
+        </div>
       </motion.div>
     );
   }

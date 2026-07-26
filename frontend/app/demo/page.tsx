@@ -178,21 +178,20 @@ export default function DemoPage(): React.ReactElement {
   const resetDemo = useCallback(() => {
     setIsAutoRunning(false);
     setCurrentStep(0);
-    // Reload both iframes to reset state
-    const doctorFrame = document.getElementById("doctor-frame") as HTMLIFrameElement;
-    const patientFrame = document.getElementById("patient-frame") as HTMLIFrameElement;
-    if (doctorFrame) doctorFrame.src = "/doctor/login";
-    if (patientFrame) patientFrame.src = "/patient/login";
   }, []);
 
   // Build iframe URLs based on current step
   const getDoctorUrl = () => {
-    if (currentStep >= 1) return "/doctor/dashboard?demo=1"; // Auto-login from step 2
+    // The login page owns token creation and redirects to the dashboard. Keep
+    // this value stable after step 2 so later narration steps do not reload it.
+    if (currentStep >= 1) return "/doctor/login?demo=1";
     return "/doctor/login";
   };
 
   const getPatientUrl = () => {
-    if (currentStep >= 2) return "/patient/consent?demo=1"; // Auto-login from step 3
+    // As above, enter through the login screen so the patient role token is
+    // established before the consent page's demo auto-approval can run.
+    if (currentStep >= 2) return "/patient/login?demo=1";
     return "/patient/login";
   };
 
@@ -238,7 +237,6 @@ export default function DemoPage(): React.ReactElement {
           <div className="flex-1 relative">
             <iframe
               id="doctor-frame"
-              key={`doctor-${currentStep}`}
               src={getDoctorUrl()}
               title="Doctor Portal"
               className="absolute inset-0 w-full h-full border-0 bg-white"
@@ -263,7 +261,6 @@ export default function DemoPage(): React.ReactElement {
           <PhoneFrame>
             <iframe
               id="patient-frame"
-              key={`patient-${currentStep}`}
               src={getPatientUrl()}
               title="Patient Application"
               className="w-full h-full border-0 bg-stellarWhite"

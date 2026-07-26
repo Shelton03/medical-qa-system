@@ -63,6 +63,16 @@ class Settings(BaseSettings):
     # Password hashing
     bcrypt_rounds: int = Field(default=12, validation_alias="BCRYPT_ROUNDS")
 
+    # Assessment pipeline
+    self_consistency_runs: int = Field(
+        default=3,
+        validation_alias="SELF_CONSISTENCY_RUNS",
+    )
+    confidence_threshold: float = Field(
+        default=0.7,
+        validation_alias="CONFIDENCE_THRESHOLD",
+    )
+
     @computed_field
     @property
     def jwt_expiration_seconds(self) -> int:

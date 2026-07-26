@@ -13,9 +13,11 @@
 import type {
   AIMessageCreatePayload,
   AIMessageResponse,
+  AIMessageStreamChunk,
   AISessionCreatePayload,
   AISessionResponse,
   AISessionWithMessagesResponse,
+  AdminFacilityItem,
   ApiEnvelope,
   AdminDashboardStats,
   AdminDoctorListItem,
@@ -33,6 +35,7 @@ import type {
   ConsentRequestResponse,
   CountResponse,
   CreateConsentPayload,
+  CreateFacilityPayload,
   DiagnosisCreatePayload,
   DiagnosisResponse,
   DifferentialDiagnosis,
@@ -49,6 +52,7 @@ import type {
   PatientResponse,
   ScheduleAppointment,
   ScheduleUpdateRequest,
+  SystemConfigItem,
   TimeOffAdminRequest,
   TimeOffEntry,
   TimeOffRequest,
@@ -56,6 +60,8 @@ import type {
   TimelineEvent,
   TokenPair,
   UnreadCountResponse,
+  UpdateFacilityPayload,
+  UpdateSystemConfigPayload,
   UserProfile,
   VisitCreatePayload,
   VisitResponse,
@@ -207,10 +213,12 @@ async function request<T>(
     body = (await response.json()) as ApiEnvelope<T>;
   }
 
-  if (response.status === 401) {
+  // Authentication endpoints intentionally return 401 for invalid credentials.
+  // They must not invoke token refresh or navigate away from the login form.
+  if (response.status === 401 && !options.skipAuth) {
     const refreshed = await attemptTokenRefresh();
     if (!refreshed) {
-      clearStoredTokens();
+      clearStoredTokensForRole(getCurrentRole());
       redirectToLogin();
       throw new ApiError("UNAUTHORIZED", "Session expired. Please log in again.");
     }
@@ -507,7 +515,7 @@ export const aiApi = {
   sendMessageStream: async (
     sessionId: string,
     content: string,
-    onChunk: (chunk: string) => void
+    onChunk: (chunk: AIMessageStreamChunk) => void
   ): Promise<void> => {
     const token = getStoredAccessToken();
     const headers: Record<string, string> = {
@@ -551,10 +559,9 @@ export const aiApi = {
             const data = trimmed.slice(6);
             if (data === "[DONE]") return;
             try {
-              const parsed = JSON.parse(data) as { token?: string; done?: boolean };
+              const parsed = JSON.parse(data) as AIMessageStreamChunk;
               if (parsed.done) return;
-              const chunk = parsed.token ?? "";
-              if (chunk) onChunk(chunk);
+              onChunk(parsed);
             } catch {
               // Ignore malformed JSON lines
             }
@@ -669,6 +676,9 @@ export const scheduleApi = {
   getMySchedule: (): Promise<DoctorScheduleView> =>
     request<DoctorScheduleView>("/doctor/schedule", { method: "GET" }),
 
+  getMyAppointments: (): Promise<ScheduleAppointment[]> =>
+    request<ScheduleAppointment[]>("/doctor/appointments", { method: "GET" }),
+
   getMyAppointmentsToday: (): Promise<ScheduleAppointment[]> =>
     request<ScheduleAppointment[]>("/doctor/appointments/today", { method: "GET" }),
 
@@ -733,9 +743,21 @@ export const adminApi = {
     if (filters?.priority) search.set("priority", filters.priority);
     if (filters?.doctor_search) search.set("doctor_search", filters.doctor_search);
     if (filters?.patient_search) search.set("patient_search", filters.patient_search);
-    if (filters?.page) search.set("page", String(filters.page));
-    if (filters?.page_size) search.set("page_size", String(filters.page_size));
-    return request<PaginatedAdminAppointments>(`/appointments/admin/appointments?${search.toString()}`, { method: "GET" });
+    // Convert page/page_size to limit/offset for backend
+    const page = filters?.page ?? 1;
+    const page_size = filters?.page_size ?? 20;
+    search.set("limit", String(page_size));
+    search.set("offset", String((page - 1) * page_size));
+    return request<{ items: AppointmentAdminItem[]; total: number; limit: number; offset: number }>(
+      `/appointments/admin/appointments?${search.toString()}`,
+      { method: "GET" }
+    ).then((r) => ({
+      items: r.items,
+      total: r.total,
+      page,
+      page_size,
+      total_pages: Math.max(1, Math.ceil(r.total / page_size)),
+    }));
   },
 
   cancelAppointment: (appointmentId: string): Promise<{ message: string }> =>
@@ -747,7 +769,32 @@ export const adminApi = {
       body: JSON.stringify({ doctor_id: doctorId }),
     }),
 
-  // Placeholder for future facilities endpoints
-  listFacilities: (): Promise<{ id: string; name: string; address: string }[]> =>
-    request<{ id: string; name: string; address: string }[]>("/appointments/admin/facilities", { method: "GET" }),
+  // Settings
+  listSettings: (): Promise<SystemConfigItem[]> =>
+    request<SystemConfigItem[]>("/admin/settings", { method: "GET" }),
+
+  updateSetting: (key: string, data: UpdateSystemConfigPayload): Promise<SystemConfigItem> =>
+    request<SystemConfigItem>(`/admin/settings/${key}`, { method: "PUT", body: JSON.stringify(data) }),
+
+  // Facilities CRUD
+  listFacilities: (): Promise<AdminFacilityItem[]> =>
+    request<AdminFacilityItem[]>("/admin/facilities", { method: "GET" }),
+
+  getFacility: (id: string): Promise<AdminFacilityItem> =>
+    request<AdminFacilityItem>(`/admin/facilities/${id}`, { method: "GET" }),
+
+  createFacility: (data: CreateFacilityPayload): Promise<AdminFacilityItem> =>
+    request<AdminFacilityItem>("/admin/facilities", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateFacility: (id: string, data: UpdateFacilityPayload): Promise<AdminFacilityItem> =>
+    request<AdminFacilityItem>(`/admin/facilities/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteFacility: (id: string): Promise<void> =>
+    request<void>(`/admin/facilities/${id}`, { method: "DELETE" }),
 };

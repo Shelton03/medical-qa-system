@@ -12,6 +12,7 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -259,6 +260,27 @@ class Facility(Base):
     __table_args__ = (
         Index("ix_facilities_name", name),
         Index("ix_facilities_city", city),
+    )
+
+
+class SystemConfig(Base):
+    """Hospital-wide configuration settings editable by admin."""
+
+    __tablename__ = "system_configs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_system_configs_key", key),
     )
 
 
@@ -758,9 +780,25 @@ class AISession(Base):
     provider_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     conversation_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Assessment pipeline state (ported from original symptom checker)
+    assessment_done: Mapped[bool] = mapped_column(Boolean, default=False)
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    gaps_remaining: Mapped[int] = mapped_column(Integer, default=0)
+    candidate_domains: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    key_symptoms: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    missing_info: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    risk_flags: Mapped[list[str]] = mapped_column(JSONB, default=list)
+
+    # Link to appointment for pre-consultation symptom checkers
+    appointment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("appointments.id", onupdate="CASCADE", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     patient: Mapped["Patient"] = relationship("Patient", back_populates="ai_sessions")
     doctor: Mapped["Doctor"] = relationship("Doctor", back_populates="ai_sessions")
     visit: Mapped["Visit"] = relationship("Visit", back_populates="ai_sessions")
+    appointment: Mapped["Appointment"] = relationship("Appointment", back_populates="ai_sessions")
     messages: Mapped[List["AIMessage"]] = relationship(
         "AIMessage", back_populates="session"
     )
@@ -792,6 +830,8 @@ class AIMessage(Base):
     )
     role: Mapped[str] = mapped_column(String(50), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    message_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    response_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -1078,6 +1118,7 @@ class Appointment(Base):
     slot_allocation: Mapped["AppointmentSlotAllocation"] = relationship(
         "AppointmentSlotAllocation", back_populates="appointment", uselist=False
     )
+    ai_sessions: Mapped[List["AISession"]] = relationship("AISession", back_populates="appointment")
 
     __table_args__ = (
         Index("ix_appointments_patient_id", patient_id),
@@ -1171,4 +1212,3 @@ class AppointmentSlotAllocation(Base):
         Index("ix_slot_allocations_doctor_date", doctor_id, slot_date),
         Index("ix_slot_allocations_appointment", appointment_id),
     )
-

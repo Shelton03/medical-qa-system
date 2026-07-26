@@ -7,20 +7,20 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import {
   LayoutDashboard,
-  Building2,
   Users,
   CalendarDays,
   CalendarCheck,
   BarChart3,
-  Settings,
   LogOut,
   Search,
+  Building2,
+  Settings,
 } from "lucide-react";
 
 const navItems = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
-  { label: "Facilities", href: "/admin/facilities", icon: Building2 },
   { label: "Doctors", href: "/admin/doctors", icon: Users },
+  { label: "Facilities", href: "/admin/facilities", icon: Building2 },
   { label: "Schedules", href: "/admin/schedules", icon: CalendarDays },
   { label: "Appointments", href: "/admin/appointments", icon: CalendarCheck },
   { label: "Reports", href: "/admin/reports", icon: BarChart3 },

@@ -332,6 +332,24 @@ export interface AIMessageResponse {
   model_name: string | null;
   token_count: number | null;
   created_at: string;
+  message_type?: "question" | "answer";
+  type?: "question" | "answer";
+  confidence_level?: string | null;
+  risk_flags?: string[] | null;
+  explanation?: string | null;
+  disclaimer?: string | null;
+  response_metadata?: Record<string, unknown> | null;
+}
+
+export interface AIMessageStreamChunk {
+  token?: string;
+  done?: boolean;
+  type?: "question" | "answer";
+  message_type?: "question" | "answer";
+  confidence_level?: string;
+  risk_flags?: string[];
+  explanation?: string;
+  disclaimer?: string;
 }
 
 export interface AISessionWithMessagesResponse extends AISessionResponse {
@@ -429,6 +447,38 @@ export interface Facility {
   city: string;
   country: string;
   timezone: string;
+}
+
+export interface AdminFacilityItem {
+  id: string;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  city: string | null;
+  country: string | null;
+  timezone: string | null;
+  doctor_count: number;
+}
+
+export interface CreateFacilityPayload {
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  city?: string | null;
+  country?: string | null;
+  timezone?: string | null;
+}
+
+export interface UpdateFacilityPayload {
+  name?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  city?: string | null;
+  country?: string | null;
+  timezone?: string | null;
 }
 
 export interface DoctorSchedule {
@@ -535,10 +585,12 @@ export interface ScheduleAppointment {
   patient_name: string | null;
   start_time: string;
   end_time: string;
+  appointment_date?: string;
   duration_minutes: number;
   status: AppointmentStatus;
   reason: string | null;
   visit_id: string | null;
+  facility_name?: string | null;
 }
 
 export interface DoctorScheduleDay {
@@ -623,6 +675,17 @@ export interface TimeOffAdminRequest {
   end_date: string; // YYYY-MM-DD
   type: "LEAVE" | "SICK" | "TRAINING" | "OTHER";
   reason: string;
+}
+
+export interface SystemConfigItem {
+  key: string;
+  value: string;
+  description?: string;
+  updated_at?: string;
+}
+
+export interface UpdateSystemConfigPayload {
+  value: string;
 }
 
 export interface TimeOffEntry {

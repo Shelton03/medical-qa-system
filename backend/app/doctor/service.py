@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import inspect
 
 from app.db.models import (
     AuditLog,
@@ -362,7 +363,13 @@ async def update_medication_status(
 # Response mappers
 # ---------------------------------------------------------------------------
 def _visit_response(visit: Visit) -> VisitResponse:
-    patient_id = visit.medical_record.patient_id if visit.medical_record else None
+    state = inspect(visit)
+    patient_id = None
+    # Only access medical_record if already loaded in the instance dict
+    if "medical_record" in state.dict:
+        medical_record = state.dict["medical_record"]
+        if medical_record is not None:
+            patient_id = medical_record.patient_id
     return VisitResponse(
         id=visit.id,
         patient_id=patient_id,

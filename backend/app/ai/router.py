@@ -29,6 +29,7 @@ from app.core.database import get_db
 from app.db.models import (
     AISession as AISessionModel,
     AIMessage as AIMessageModel,
+    ConsentRequest,
     Doctor,
     Patient,
     Visit,
@@ -39,6 +40,17 @@ from app.shared.exceptions import ForbiddenException, NotFoundException
 
 router = APIRouter()
 chat_engine = ChatEngine()
+
+
+def _message_response(message: AIMessageModel) -> AIMessageResponse:
+    """Expose persisted structured assessment metadata with its AI message."""
+    response = AIMessageResponse.model_validate(message)
+    metadata = message.response_metadata or {}
+    response.confidence_level = metadata.get("confidence_level")
+    response.risk_flags = metadata.get("risk_flags")
+    response.explanation = metadata.get("explanation")
+    response.disclaimer = metadata.get("disclaimer")
+    return response
 
 
 async def _get_doctor_id(db: AsyncSession, current_user: User) -> UUID:
@@ -134,6 +146,18 @@ async def get_session_for_user(
         doctor_id = await _get_doctor_id(db, current_user)
         if session.doctor_id != doctor_id:
             raise ForbiddenException("You are not authorized to view this session.")
+        if session.patient_id is not None:
+            consent_result = await db.execute(
+                select(ConsentRequest.id).where(
+                    ConsentRequest.doctor_id == doctor_id,
+                    ConsentRequest.patient_id == session.patient_id,
+                    ConsentRequest.status == "approved",
+                    (ConsentRequest.expires_at.is_(None))
+                    | (ConsentRequest.expires_at >= datetime.now(timezone.utc)),
+                )
+            )
+            if consent_result.scalar_one_or_none() is None:
+                raise ForbiddenException("Active patient consent is required to access this session.")
     elif role == "patient":
         patient_id = await _get_patient_id(db, current_user)
         if session.patient_id != patient_id:
@@ -163,7 +187,7 @@ async def get_session(
     messages = msg_result.scalars().all()
 
     response_data = AISessionWithMessagesResponse.model_validate(session)
-    response_data.messages = [AIMessageResponse.model_validate(m) for m in messages]
+    response_data.messages = [_message_response(m) for m in messages]
     return Envelope.ok(response_data)
 
 
@@ -180,22 +204,13 @@ async def send_message(
     current_user: User = Depends(get_current_user),
 ) -> Envelope[AIMessageResponse]:
     session = await get_session_for_user(db, session_id, current_user)
-    provider = get_ai_provider()
-    await chat_engine.generate_ai_response(
-        db, session_id, body.content, provider
+    response_data = await chat_engine.generate_assessment_response(
+        db, session_id, body.content
     )
     await db.commit()
 
-    result = await db.execute(
-        select(AIMessageModel)
-        .where(
-            AIMessageModel.session_id == session_id,
-            AIMessageModel.role == "ASSISTANT",
-        )
-        .order_by(AIMessageModel.created_at.desc())
-    )
-    msg = result.scalar_one()
-    return Envelope.ok(AIMessageResponse.model_validate(msg))
+    msg = response_data["message"]
+    return Envelope.ok(_message_response(msg))
 
 
 @router.post(
@@ -210,13 +225,23 @@ async def send_message_stream(
     current_user: User = Depends(get_current_user),
 ) -> StreamingResponse:
     session = await get_session_for_user(db, session_id, current_user)
-    provider = get_ai_provider()
+
+    response_data = await chat_engine.generate_assessment_response(
+        db, session_id, body.content
+    )
+    await db.commit()
+
+    text = response_data.get("content", "")
+    metadata = {
+        key: value
+        for key, value in response_data.items()
+        if key not in {"content", "message"}
+    }
 
     async def event_generator() -> AsyncIterator[str]:
-        async for chunk in chat_engine.generate_ai_stream(
-            db, session_id, body.content, provider
-        ):
-            payload = json.dumps({"token": chunk})
+        yield f"data: {json.dumps(metadata)}\n\n"
+        for chunk in text.split():
+            payload = json.dumps({"token": chunk + " "})
             yield f"data: {payload}\n\n"
         yield f"data: {json.dumps({'done': True})}\n\n"
 

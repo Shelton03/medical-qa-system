@@ -2,7 +2,12 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { authApi, clearStoredTokens, setStoredTokens } from "@/lib/api";
+import {
+  authApi,
+  clearStoredTokens,
+  clearStoredTokensForRole,
+  setStoredTokens,
+} from "@/lib/api";
 import type { UserProfile, UserRole } from "@/lib/types";
 import { AuthContext } from "@/hooks/useAuth";
 
@@ -46,6 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
   });
 
   const hydrateUser = useCallback(async () => {
+    const activeRole = getActiveRole();
     try {
       const profile = await authApi.getMe();
       setState({
@@ -55,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
         role: profile.role,
       });
     } catch {
-      clearStoredTokens();
+      if (activeRole) clearStoredTokensForRole(activeRole);
       setState({
         user: null,
         isLoading: false,
@@ -95,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
           // fallthrough
         }
       }
-      clearStoredTokens();
+      clearStoredTokensForRole(activeRole);
       setState({
         user: null,
         isLoading: false,
@@ -206,24 +212,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
             // WebSocketProvider will reconnect on storage event
           })
           .catch(() => {
-            clearStoredTokens();
+            clearStoredTokensForRole(activeRole);
             setState({
               user: null,
               isLoading: false,
               isAuthenticated: false,
               role: null,
             });
-            router.push("/doctor/login");
+            router.push(`/${activeRole}/login`);
           });
       } else {
-        clearStoredTokens();
+        clearStoredTokensForRole(activeRole);
         setState({
           user: null,
           isLoading: false,
           isAuthenticated: false,
           role: null,
         });
-        router.push("/doctor/login");
+        router.push(`/${activeRole}/login`);
       }
     };
 
