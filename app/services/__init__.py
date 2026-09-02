@@ -14,7 +14,7 @@ if settings.LLM_API_KEY:
             api_key=settings.LLM_API_KEY,
             http_client=http_client
         )
-        logger.info(f"Connected to LLM: {settings.LLM_MODEL} at {settings.LLM_BASE_URL}")
+        logger.info(f"Connected to LLM: {settings.LLM_MODEL}")
     except Exception as e:
         logger.error(f"Failed to initialize LLM Client: {e}")
 else:

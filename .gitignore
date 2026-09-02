@@ -4,3 +4,6 @@ __pycache__/
 *.log
 .next/
 backend.log
+
+# AI session logs and stray files
+session-ses_*.md

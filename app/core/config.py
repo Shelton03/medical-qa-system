@@ -10,14 +10,14 @@ class Settings(BaseSettings):
     MONGODB_DB_NAME: str
     
     POSTGRES_URL: str
-    POSTGRES_PASSWORD: str = "[REDACTED]"
+    POSTGRES_PASSWORD: str
     
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
     
-    LLM_BASE_URL: str = "https://[REDACTED]:9051/v1"
+    LLM_BASE_URL: str
     LLM_API_KEY: str
-    LLM_MODEL: str = "[REDACTED]"
+    LLM_MODEL: str
     
     SELF_CONSISTENCY_RUNS: int = 3
     CONFIDENCE_THRESHOLD: float = 0.7
