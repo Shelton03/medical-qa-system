@@ -133,6 +133,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
     [router]
   );
 
+  const loginAdmin = useCallback(
+    async (email: string, password: string) => {
+      setState((prev) => ({ ...prev, isLoading: true }));
+      try {
+        const response = await authApi.loginAdmin(email, password);
+        setStoredTokens("admin", response.access_token, response.refresh_token);
+        const profile = await authApi.getMe();
+        setState({
+          user: profile,
+          isLoading: false,
+          isAuthenticated: true,
+          role: profile.role,
+        });
+        router.push("/admin/dashboard");
+      } catch (error) {
+        setState((prev) => ({ ...prev, isLoading: false }));
+        throw error;
+      }
+    },
+    [router]
+  );
+
   const logout = useCallback(async () => {
     setState((prev) => ({ ...prev, isLoading: true }));
     try {
@@ -157,6 +179,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
     isAuthenticated: state.isAuthenticated,
     role: state.role,
     loginDoctor,
+    loginAdmin,
     loginPatient,
     logout,
   };

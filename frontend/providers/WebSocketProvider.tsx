@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { WebSocketContext } from "@/hooks/useWebSocket";
-import { notificationsApi } from "@/lib/api";
+import { getStoredAccessToken, notificationsApi } from "@/lib/api";
 import type { ConsentStatus, NotificationResponse, WsEvent } from "@/lib/types";
 
 const WS_URL =
@@ -12,9 +12,16 @@ const WS_URL =
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000];
 const HEARTBEAT_INTERVAL = 30000;
 
-function getStoredAccessToken(): string | null {
+const TOKEN_KEYS = ["mirage_doctor_access_token", "mirage_patient_access_token", "mirage_admin_access_token"];
+
+function localGetStoredAccessToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("mirage_access_token");
+  for (const key of TOKEN_KEYS) {
+    const token = localStorage.getItem(key);
+    if (token) return token;
+  }
+  // Fallback for legacy keys
+  return getStoredAccessToken();
 }
 
 export function WebSocketProvider({ children }: { children: React.ReactNode }): React.ReactElement {
@@ -29,7 +36,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
 
   // Fetch initial notifications only when authenticated
   useEffect(() => {
-    const token = getStoredAccessToken();
+    const token = localGetStoredAccessToken();
     if (!token) return;
     notificationsApi.listNotifications({ unread_only: false, limit: 50 }).then((data) => {
       if (isMountedRef.current) {
@@ -132,7 +139,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
 
   const connect = useCallback(() => {
     if (!isMountedRef.current) return;
-    const token = getStoredAccessToken();
+    const token = localGetStoredAccessToken();
     if (!token) return;
 
     const ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`);
@@ -186,7 +193,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
   // Re-establish socket when token changes (e.g. after login)
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
-      if (e.key === "mirage_access_token") {
+      if (e.key && (TOKEN_KEYS.includes(e.key) || e.key === "mirage_access_token")) {
         if (socketRef.current) socketRef.current.close();
         reconnectAttemptRef.current = 0;
         setTimeout(() => connect(), 100);
