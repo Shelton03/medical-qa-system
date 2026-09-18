@@ -6,6 +6,10 @@ export const metadata: Metadata = {
   title: 'Mirage — Healthcare Platform',
   description:
     'Secure, real-time patient–doctor collaboration with AI-assisted clinical workflows.',
+  icons: {
+    icon: '/icon.svg',
+    apple: '/icon.svg',
+  },
 };
 
 export default function RootLayout({
