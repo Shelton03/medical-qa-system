@@ -21,6 +21,11 @@ from app.providers.implementations.mock_transcription import MockTranscriptionPr
 from app.providers.implementations.mock_notification import MockNotificationProvider
 from app.providers.implementations.mock_storage import MockStorageProvider
 from app.providers.implementations.mock_email import MockEmailProvider
+from app.providers.implementations.gateway_providers import (
+    GatewayDiagnosisProvider,
+    GatewaySummaryProvider,
+    GatewayTranscriptionProvider,
+)
 from app.providers.implementations.local_ai_provider import LocalDiagnosisProvider, LocalSummaryProvider
 from app.providers.implementations.local_transcription_provider import LocalTranscriptionProvider
 
@@ -38,6 +43,8 @@ def get_ai_provider() -> DiagnosisProvider:
     if key not in _registry:
         if name == "mock":
             _registry[key] = MockDiagnosisProvider()
+        elif name in ("gateway", "ccaimex"):
+            _registry[key] = GatewayDiagnosisProvider()
         elif name == "local":
             _registry[key] = LocalDiagnosisProvider()
         else:
@@ -64,6 +71,8 @@ def get_summary_provider() -> ClinicalSummaryProvider:
     if key not in _registry:
         if name == "mock":
             _registry[key] = MockClinicalSummaryProvider()
+        elif name in ("gateway", "ccaimex"):
+            _registry[key] = GatewaySummaryProvider()
         elif name == "local":
             _registry[key] = LocalSummaryProvider()
         else:
@@ -78,6 +87,8 @@ def get_transcription_provider() -> TranscriptionProvider:
     if key not in _registry:
         if name == "mock":
             _registry[key] = MockTranscriptionProvider()
+        elif name in ("gateway", "ccaimex"):
+            _registry[key] = GatewayTranscriptionProvider()
         elif name == "local":
             _registry[key] = LocalTranscriptionProvider()
         else:

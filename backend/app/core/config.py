@@ -50,12 +50,21 @@ class Settings(BaseSettings):
         validation_alias="REFRESH_TOKEN_EXPIRE_DAYS",
     )
 
+    # AI / LLM Gateway
+    ai_provider: str = Field(default="mock", validation_alias="AI_PROVIDER")
+    llm_gateway_url: str | None = Field(default=None, validation_alias="LLM_GATEWAY_URL")
+    llm_gateway_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("LLM_GATEWAY_API_KEY", "LLM_API_KEY"),
+    )
+    llm_model: str = Field(default="Caimex/GLM-5.3-Flash", validation_alias="LLM_MODEL")
+    transcription_model: str = Field(default="whisper-1", validation_alias="TRANSCRIPTION_MODEL")
+
     # Feature flags
     demo_mode_enabled: bool = Field(
         default=False,
         validation_alias=AliasChoices("DEMO_MODE", "DEMO_MODE_ENABLED"),
     )
-    ai_provider: str = Field(default="mock", validation_alias="AI_PROVIDER")
 
     # Observability
     log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")

@@ -1,8 +1,8 @@
-#!/usr/bin/env python3
 """Provider Factory — resolves concrete AIProvider instances by name."""
 
 from __future__ import annotations
 
+from app.ai.gateway_provider import GatewayAIProvider
 from app.ai.local_llm_provider import LocalAIProvider
 from app.ai.mock_provider import MockAIProvider
 from app.ai.provider import AIProvider
@@ -13,7 +13,7 @@ _provider_instances: dict[str, AIProvider] = {}
 
 
 class OpenAIProvider(AIProvider):
-    """Placeholder for future OpenAI integration."""
+    """Placeholder for future direct OpenAI integration."""
 
     async def generate_response(self, conversation_history, context) -> str:
         raise NotImplementedError("OpenAIProvider is not yet implemented.")
@@ -27,7 +27,7 @@ class OpenAIProvider(AIProvider):
 
 
 class AnthropicProvider(AIProvider):
-    """Placeholder for future Anthropic integration."""
+    """Placeholder for future direct Anthropic integration."""
 
     async def generate_response(self, conversation_history, context) -> str:
         raise NotImplementedError("AnthropicProvider is not yet implemented.")
@@ -45,7 +45,7 @@ def get_ai_provider(provider_name: str | None = None) -> AIProvider:
     Resolve and return a singleton AIProvider instance by name.
 
     Defaults to the provider configured in ``settings.ai_provider``.
-    Supported names: ``mock``, ``local``, ``openai``, ``anthropic``.
+    Supported names: ``mock``, ``local``, ``gateway``, ``ccaimex``.
     """
     name = (provider_name or settings.ai_provider or "local").lower()
 
@@ -54,6 +54,8 @@ def get_ai_provider(provider_name: str | None = None) -> AIProvider:
 
     if name == "mock":
         provider: AIProvider = MockAIProvider()
+    elif name in ("gateway", "ccaimex"):
+        provider = GatewayAIProvider()
     elif name == "local":
         provider = LocalAIProvider()
     elif name == "openai":

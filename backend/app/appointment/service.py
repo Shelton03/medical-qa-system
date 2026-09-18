@@ -437,6 +437,17 @@ class AppointmentService:
         await db.commit()
         await db.refresh(appointment)
 
+        # Reload with eager-loaded relationships for the response
+        result = await db.execute(
+            select(Appointment)
+            .where(Appointment.id == appointment.id)
+            .options(
+                selectinload(Appointment.facility),
+                selectinload(Appointment.doctor).selectinload(Doctor.user),
+            )
+        )
+        appointment = result.scalar_one()
+
         # Emit WebSocket event
         await emit_ws_event(
             f"doctor:{doctor_id}",
@@ -598,7 +609,7 @@ class AppointmentService:
         query = (
             query
             .options(
-                selectinload(Appointment.doctor),
+                selectinload(Appointment.doctor).selectinload(Doctor.user),
                 selectinload(Appointment.facility),
                 selectinload(Appointment.slot_allocation),
             )

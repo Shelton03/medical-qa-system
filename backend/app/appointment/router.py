@@ -631,7 +631,12 @@ async def get_appointment(
     from app.db.models import Appointment
 
     result = await db.execute(
-        select(Appointment).where(Appointment.id == appointment_id)
+        select(Appointment)
+        .where(Appointment.id == appointment_id)
+        .options(
+            selectinload(Appointment.facility),
+            selectinload(Appointment.doctor).selectinload(Doctor.user),
+        )
     )
     appointment = result.scalar_one_or_none()
     if not appointment:
@@ -709,7 +714,10 @@ def _to_response(appointment) -> AppointmentResponse:
         id=appointment.id,
         patient_id=appointment.patient_id,
         facility_id=appointment.facility_id,
+        facility_name=appointment.facility.name if appointment.facility else None,
         doctor_id=appointment.doctor_id,
+        doctor_name=appointment.doctor.user.last_name if appointment.doctor and appointment.doctor.user else None,
+        doctor_specialty=appointment.doctor.specialty if appointment.doctor else None,
         visit_id=appointment.visit_id,
         appointment_date=appointment.appointment_date,
         desired_duration_minutes=appointment.desired_duration_minutes,

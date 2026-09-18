@@ -66,7 +66,10 @@ class AppointmentResponse(BaseModel):
     id: uuid.UUID
     patient_id: uuid.UUID
     facility_id: uuid.UUID
+    facility_name: Optional[str] = None
     doctor_id: Optional[uuid.UUID] = None
+    doctor_name: Optional[str] = None
+    doctor_specialty: Optional[str] = None
     visit_id: Optional[uuid.UUID] = None
 
     appointment_date: date
