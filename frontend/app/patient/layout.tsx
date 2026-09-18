@@ -1,6 +1,6 @@
 import React from "react";
-import { Bell } from "lucide-react";
 import { PatientBottomNav } from "@/components/patient/BottomNav";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 interface PatientLayoutProps {
   children: React.ReactNode;
@@ -19,13 +19,7 @@ export default function PatientLayout({ children }: PatientLayoutProps): React.R
           />
           <span className="text-white font-semibold text-sm">Mirage</span>
         </div>
-        <button
-          aria-label="Notifications"
-          className="relative p-2 rounded-full hover:bg-white/10 transition-colors touch-target"
-        >
-          <Bell className="w-5 h-5 text-white" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-alertOrange rounded-full" />
-        </button>
+        <NotificationBell href="/patient/notifications" variant="dark" />
       </header>
 
       {/* Content */}
