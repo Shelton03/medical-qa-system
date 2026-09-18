@@ -603,7 +603,14 @@ export const appointmentsApi = {
   create: (data: AppointmentCreateRequest): Promise<AppointmentResponse> =>
     request<AppointmentResponse>("/appointments", {
       method: "POST",
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        facility_id: data.facility_id,
+        appointment_date: data.appointment_date,
+        symptoms: data.symptoms,
+        reason: data.reason,
+        desired_duration_minutes: data.duration_minutes,
+        is_emergency: data.priority === "EMERGENCY",
+      }),
     }),
 
   listMy: (params?: {
