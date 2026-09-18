@@ -9,16 +9,22 @@ import React, {
 } from "react";
 import { WebSocketContext } from "@/hooks/useWebSocket";
 import { getStoredAccessToken, notificationsApi } from "@/lib/api";
-import type { ConsentStatus, NotificationResponse, WsEvent } from "@/lib/types";
+import type { NotificationResponse, WsEvent } from "@/lib/types";
 
-const WS_URL =
+const RAW_WS_URL =
   typeof process !== "undefined" && process.env.NEXT_PUBLIC_WS_URL
     ? process.env.NEXT_PUBLIC_WS_URL
-    : "ws://localhost:8002/ws/notifications";
+    : "ws://localhost:8002/ws";
 
-// Absolute minimum time between reconnection attempts — prevents tight loops.
-const MIN_RECONNECT_INTERVAL_MS = 5000;
-const HEARTBEAT_INTERVAL_MS = 30000;
+const WS_URL = RAW_WS_URL.endsWith("/notifications")
+  ? RAW_WS_URL
+  : `${RAW_WS_URL.replace(/\/$/, "")}/notifications`;
+
+// Exponential backoff config — keeps the connection alive without spamming.
+const INITIAL_RECONNECT_DELAY_MS = 1000;
+const MAX_RECONNECT_DELAY_MS = 30000;
+const MAX_RECONNECT_ATTEMPTS = 10;
+const HEARTBEAT_INTERVAL_MS = 25000;
 
 // Stable wrapper so internal WebSocket state churn doesn't re-render the rest of the app.
 const StableChildren = React.memo(function StableChildren({
@@ -38,9 +44,37 @@ function localGetStoredAccessToken(): string | null {
   ];
   for (const key of roleKeys) {
     const token = localStorage.getItem(key);
-    if (token) return token;
+    if (token && !isTokenExpired(token)) return token;
   }
-  return getStoredAccessToken();
+  const fallback = getStoredAccessToken();
+  return fallback && !isTokenExpired(fallback) ? fallback : null;
+}
+
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1])) as { exp?: number };
+    if (!payload.exp) return false;
+    return payload.exp * 1000 < Date.now();
+  } catch {
+    return true;
+  }
+}
+
+function clearStoredTokens(): void {
+  if (typeof window === "undefined") return;
+  const keys = [
+    "mirage_doctor_access_token",
+    "mirage_doctor_refresh_token",
+    "mirage_patient_access_token",
+    "mirage_patient_refresh_token",
+    "mirage_admin_access_token",
+    "mirage_admin_refresh_token",
+    "mirage_access_token",
+    "mirage_refresh_token",
+    "access_token",
+  ];
+  keys.forEach((key) => localStorage.removeItem(key));
+  document.cookie = "access_token=; path=/; max-age=0";
 }
 
 export function WebSocketProvider({
@@ -59,7 +93,7 @@ export function WebSocketProvider({
   const socketRef = useRef<WebSocket | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastReconnectRef = useRef<number>(0);
+  const reconnectAttemptsRef = useRef(0);
   const isMountedRef = useRef(true);
 
   const bump = useCallback(() => {
@@ -175,32 +209,41 @@ export function WebSocketProvider({
       clearInterval(heartbeatRef.current);
       heartbeatRef.current = null;
     }
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
     if (socketRef.current) {
-      // Only close if still open/connecting to avoid errors on already-closed sockets.
-      if (
-        socketRef.current.readyState === WebSocket.OPEN ||
-        socketRef.current.readyState === WebSocket.CONNECTING
-      ) {
-        socketRef.current.close();
+      // Suppress onclose handler while closing intentionally.
+      const ws = socketRef.current;
+      ws.onclose = null;
+      ws.onerror = null;
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
       }
       socketRef.current = null;
     }
   }, []);
 
-  const connect = useCallback(() => {
+  const scheduleReconnect = useCallback((code?: number) => {
+    if (!isMountedRef.current) return;
+    // Don't reconnect on deliberate closures.
+    if (code === 1000 || code === 1001) return;
+    if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) return;
+
+    reconnectAttemptsRef.current += 1;
+    const delay = Math.min(
+      INITIAL_RECONNECT_DELAY_MS * 2 ** (reconnectAttemptsRef.current - 1),
+      MAX_RECONNECT_DELAY_MS
+    );
+    if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+    reconnectTimeoutRef.current = setTimeout(() => connectRef.current(), delay);
+  }, []);
+
+  const connectRef = useRef(() => {
     if (!isMountedRef.current) return;
     const token = localGetStoredAccessToken();
     if (!token) return;
-
-    // Enforce minimum reconnect interval to stop flashing loops.
-    const now = Date.now();
-    const timeSinceLast = now - lastReconnectRef.current;
-    if (timeSinceLast < MIN_RECONNECT_INTERVAL_MS) {
-      const wait = MIN_RECONNECT_INTERVAL_MS - timeSinceLast;
-      reconnectTimeoutRef.current = setTimeout(() => connect(), wait);
-      return;
-    }
-    lastReconnectRef.current = now;
 
     cleanupSocket();
 
@@ -211,19 +254,20 @@ export function WebSocketProvider({
       ws.onopen = () => {
         if (!isMountedRef.current) return;
         isConnectedRef.current = true;
+        reconnectAttemptsRef.current = 0;
         bump();
       };
 
       ws.onmessage = handleWsMessage;
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         if (!isMountedRef.current) return;
         if (isConnectedRef.current) {
           isConnectedRef.current = false;
           bump();
         }
         cleanupSocket();
-        reconnectTimeoutRef.current = setTimeout(() => connect(), MIN_RECONNECT_INTERVAL_MS);
+        scheduleReconnect(event.code);
       };
 
       ws.onerror = () => {
@@ -232,22 +276,22 @@ export function WebSocketProvider({
 
       heartbeatRef.current = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "heartbeat" }));
+          ws.send(JSON.stringify({ action: "heartbeat" }));
         }
       }, HEARTBEAT_INTERVAL_MS);
     } catch {
-      reconnectTimeoutRef.current = setTimeout(() => connect(), MIN_RECONNECT_INTERVAL_MS);
+      scheduleReconnect();
     }
-  }, [bump, cleanupSocket, handleWsMessage]);
+  });
 
   useEffect(() => {
-    connect();
+    connectRef.current();
     return () => {
       isMountedRef.current = false;
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       cleanupSocket();
     };
-  }, [connect, cleanupSocket]);
+  }, [cleanupSocket]);
 
   // Re-establish socket when token changes (e.g. after login)
   useEffect(() => {
@@ -259,13 +303,14 @@ export function WebSocketProvider({
         "mirage_access_token",
       ];
       if (e.key && trackedKeys.includes(e.key)) {
+        reconnectAttemptsRef.current = 0;
         cleanupSocket();
-        setTimeout(() => connect(), 100);
+        setTimeout(() => connectRef.current(), 100);
       }
     };
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
-  }, [connect, cleanupSocket]);
+  }, [cleanupSocket]);
 
   const markRead = useCallback(
     async (notificationId: string) => {

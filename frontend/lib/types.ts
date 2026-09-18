@@ -80,6 +80,17 @@ export interface MedicalRecordSummaryResponse {
   allergies: AllergySummary[];
   chronic_conditions: ChronicConditionSummary[];
   medications: MedicationSummary[];
+  visits: VisitSummary[];
+}
+
+export interface VisitSummary {
+  id: string;
+  visit_date: string;
+  status: string;
+  reason: string | null;
+  chief_complaint: string | null;
+  facility_name: string | null;
+  doctor_name: string | null;
 }
 
 export interface AllergySummary {
@@ -103,6 +114,7 @@ export interface MedicationSummary {
   dosage: string | null;
   frequency: string | null;
   status: string;
+  end_date: string | null;
 }
 
 export interface PatientFullProfileResponse extends PatientResponse {
@@ -356,8 +368,19 @@ export interface AISessionWithMessagesResponse extends AISessionResponse {
   messages: AIMessageResponse[];
 }
 
+export interface PreAssessmentResponse {
+  available: boolean;
+  reason?: string;
+  session_id?: string;
+  status?: string;
+  started_at?: string;
+  summary?: string | null;
+  messages?: { id: string; role: string; content: string; created_at: string }[];
+}
+
 export interface AISessionCreatePayload {
   patient_id?: string;
+  appointment_id?: string;
 }
 
 export interface AIMessageCreatePayload {

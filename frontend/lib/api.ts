@@ -50,6 +50,7 @@ import type {
   PaginatedAdminAppointments,
   PatientFullProfileResponse,
   PatientResponse,
+  PreAssessmentResponse,
   ScheduleAppointment,
   ScheduleUpdateRequest,
   SystemConfigItem,
@@ -481,13 +482,16 @@ export const consultationsApi = {
 
   cancelConsultation: (visitId: string): Promise<VisitResponse> =>
     request<VisitResponse>(`/doctor/${visitId}/cancel`, { method: "POST", body: JSON.stringify({}) }),
+
+  getPreAssessment: (visitId: string): Promise<PreAssessmentResponse> =>
+    request<PreAssessmentResponse>(`/doctor/consultations/${visitId}/pre-assessment`, { method: "GET" }),
 };
 
 export const aiApi = {
-  createSession: (patientId?: string): Promise<AISessionResponse> =>
+  createSession: (payload: AISessionCreatePayload = {}): Promise<AISessionResponse> =>
     request<AISessionResponse>("/ai/sessions", {
       method: "POST",
-      body: JSON.stringify({ patient_id: patientId } as AISessionCreatePayload),
+      body: JSON.stringify(payload),
     }),
 
   listSessions: (page = 1, pageSize = 20): Promise<AISessionResponse[]> =>

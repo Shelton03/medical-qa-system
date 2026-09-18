@@ -9,10 +9,11 @@ import {
   FileText,
   ChevronRight,
   Bell,
-  Activity,
   User,
   AlertTriangle,
   CalendarPlus,
+  Pill,
+  Stethoscope,
 } from "lucide-react";
 import { patientsApi, notificationsApi } from "@/lib/api";
 import { LoadingSkeleton } from "@/components/ui/LoadingSkeleton";
@@ -48,6 +49,46 @@ export default function PatientHomePage(): React.ReactElement {
   const allergies = profile?.medical_record?.allergies ?? [];
   const chronicConditions = profile?.medical_record?.chronic_conditions ?? [];
   const medications = profile?.medical_record?.medications ?? [];
+  const visits = profile?.medical_record?.visits ?? [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const activeMedications = medications.filter((m) => {
+    if (!m.end_date) return true;
+    const end = new Date(m.end_date);
+    end.setHours(0, 0, 0, 0);
+    return end >= today;
+  });
+
+  const stats = [
+    {
+      label: "Conditions",
+      value: chronicConditions.length,
+      icon: ShieldCheck,
+      color: "text-celestialBlue",
+      bg: "bg-celestialBlue-50 border-celestialBlue/20",
+    },
+    {
+      label: "Active Meds",
+      value: activeMedications.length,
+      icon: Pill,
+      color: "text-healthGreen",
+      bg: "bg-healthGreen-50 border-healthGreen/20",
+    },
+    {
+      label: "Visits",
+      value: visits.length,
+      icon: Stethoscope,
+      color: "text-alertOrange",
+      bg: "bg-alertOrange-50 border-alertOrange/20",
+    },
+    {
+      label: "Allergies",
+      value: allergies.length,
+      icon: AlertTriangle,
+      color: "text-errorRed",
+      bg: "bg-errorRed-50 border-errorRed/20",
+    },
+  ];
 
   const quickActions = [
     {
@@ -70,13 +111,6 @@ export default function PatientHomePage(): React.ReactElement {
       description: "View your medical history",
       icon: FileText,
       color: "bg-celestialBlue/10 text-celestialBlue",
-    },
-    {
-      href: "/patient/symptom-check",
-      label: "AI Symptom Check",
-      description: "Check your symptoms with AI",
-      icon: Activity,
-      color: "bg-healthGreen/10 text-healthGreen",
     },
     {
       href: "/patient/notifications",
@@ -114,20 +148,21 @@ export default function PatientHomePage(): React.ReactElement {
         transition={{ delay: 0.1, duration: 0.3 }}
         className="grid grid-cols-2 gap-3"
       >
-        <div className="bg-celestialBlue-50 border border-celestialBlue/20 rounded-card p-3">
-          <ShieldCheck className="w-5 h-5 text-celestialBlue mb-1.5" />
-          <p className="text-section-title font-semibold text-mirageBlack">
-            {profileLoading ? "—" : chronicConditions.length}
-          </p>
-          <p className="text-micro text-clinicalGrey">Conditions</p>
-        </div>
-        <div className="bg-healthGreen-50 border border-healthGreen/20 rounded-card p-3">
-          <FileText className="w-5 h-5 text-healthGreen mb-1.5" />
-          <p className="text-section-title font-semibold text-mirageBlack">
-            {profileLoading ? "—" : medications.length}
-          </p>
-          <p className="text-micro text-clinicalGrey">Medications</p>
-        </div>
+        {stats.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <div
+              key={stat.label}
+              className={`border rounded-card p-3 ${stat.bg}`}
+            >
+              <Icon className={`w-5 h-5 ${stat.color} mb-1.5`} />
+              <p className="text-section-title font-semibold text-mirageBlack">
+                {profileLoading ? "—" : stat.value}
+              </p>
+              <p className="text-micro text-clinicalGrey">{stat.label}</p>
+            </div>
+          );
+        })}
       </motion.div>
 
       {/* Critical Allergies Alert */}

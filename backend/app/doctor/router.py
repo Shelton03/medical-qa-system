@@ -934,3 +934,70 @@ async def create_consultation_for_patient(
             "status": "ACTIVE",
         }
     )
+
+
+@router.get(
+    "/consultations/{visit_id}/pre-assessment",
+    response_model=Envelope[dict],
+    summary="View patient pre-assessment",
+    description="Retrieve the AI pre-assessment responses submitted by the patient for the appointment linked to this visit. Only the assigned doctor can view it.",
+)
+async def get_pre_assessment(
+    visit_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Envelope[dict]:
+    """Return patient-initiated AI pre-assessment for a visit's appointment."""
+    doctor_id = await _resolve_doctor_id(db, current_user.id)
+
+    result = await db.execute(
+        select(Visit)
+        .options(selectinload(Visit.appointment))
+        .where(Visit.id == visit_id)
+    )
+    visit = result.scalar_one_or_none()
+    if not visit:
+        raise NotFoundException("Visit not found.", error_code="VISIT_NOT_FOUND")
+    if visit.doctor_id != doctor_id:
+        raise ForbiddenException("You are not assigned to this consultation.")
+
+    if not visit.appointment:
+        return Envelope.ok({"available": False, "reason": "No appointment is linked to this visit."})
+
+    ai_result = await db.execute(
+        select(AISession)
+        .where(
+            AISession.appointment_id == visit.appointment.id,
+            AISession.provider_metadata["initiated_by"].as_string() == "patient",
+        )
+        .order_by(AISession.started_at.desc())
+    )
+    session = ai_result.scalars().first()
+    if not session:
+        return Envelope.ok({"available": False, "reason": "The patient has not submitted a pre-assessment yet."})
+
+    msg_result = await db.execute(
+        select(AIMessage)
+        .where(AIMessage.session_id == session.id)
+        .order_by(AIMessage.created_at.asc())
+    )
+    messages = msg_result.scalars().all()
+
+    return Envelope.ok(
+        {
+            "available": True,
+            "session_id": str(session.id),
+            "status": session.status,
+            "started_at": session.started_at.isoformat() if session.started_at else None,
+            "summary": session.conversation_summary,
+            "messages": [
+                {
+                    "id": str(m.id),
+                    "role": m.role,
+                    "content": m.content,
+                    "created_at": m.created_at.isoformat() if m.created_at else None,
+                }
+                for m in messages
+            ],
+        }
+    )

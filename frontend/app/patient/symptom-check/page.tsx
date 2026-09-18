@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, Suspense } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -12,6 +14,7 @@ import {
   CircleStop,
   Activity,
   ChevronRight,
+  Stethoscope,
 } from "lucide-react";
 import { aiApi } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
@@ -23,7 +26,9 @@ interface ChatMessage {
   timestamp: Date;
 }
 
-export default function PatientSymptomCheckPage(): React.ReactElement {
+function SymptomCheckContent(): React.ReactElement {
+  const searchParams = useSearchParams();
+  const appointmentId = searchParams.get("appointmentId");
   const { showToast } = useToast();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -38,7 +43,10 @@ export default function PatientSymptomCheckPage(): React.ReactElement {
   }, [messages, isAiTyping]);
 
   const createSessionMutation = useMutation({
-    mutationFn: () => aiApi.createSession(),
+    mutationFn: () => {
+      if (!appointmentId) throw new Error("No appointment selected");
+      return aiApi.createSession({ appointment_id: appointmentId });
+    },
     onSuccess: (session) => {
       setSessionId(session.id);
       setMessages([
@@ -123,6 +131,27 @@ export default function PatientSymptomCheckPage(): React.ReactElement {
     "I have a rash on my arm",
   ];
 
+  if (!appointmentId) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center p-6 text-center pb-20">
+        <div className="w-16 h-16 rounded-full bg-clinicalGrey/10 flex items-center justify-center mx-auto mb-4">
+          <Stethoscope className="w-8 h-8 text-clinicalGrey" />
+        </div>
+        <h2 className="text-section-title font-semibold text-mirageBlack mb-2">
+          No appointment selected
+        </h2>
+        <p className="text-caption text-clinicalGrey max-w-[260px] mx-auto mb-6">
+          AI pre-assessment is only available on the day of a confirmed appointment.
+        </p>
+        <Link href="/patient/appointments">
+          <button className="px-6 py-3 bg-celestialBlue text-white rounded-button text-body font-medium hover:bg-celestialBlue-600 transition-colors">
+            View Appointments
+          </button>
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full pb-20">
       {/* Header */}
@@ -187,6 +216,10 @@ export default function PatientSymptomCheckPage(): React.ReactElement {
                 <button
                   key={q}
                   onClick={() => {
+                    if (!appointmentId) {
+                      showToast({ title: "Error", message: "No appointment selected", type: "error" });
+                      return;
+                    }
                     createSessionMutation.mutate(undefined, {
                       onSuccess: () => {
                         setMessages((prev) => [
@@ -302,5 +335,20 @@ export default function PatientSymptomCheckPage(): React.ReactElement {
         </>
       )}
     </div>
+  );
+}
+
+export default function PatientSymptomCheckPage(): React.ReactElement {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-col h-full items-center justify-center p-6 pb-20">
+          <Loader2 className="w-8 h-8 animate-spin text-celestialBlue" />
+          <p className="text-caption text-clinicalGrey mt-3">Loading assessment...</p>
+        </div>
+      }
+    >
+      <SymptomCheckContent />
+    </Suspense>
   );
 }

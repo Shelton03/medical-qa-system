@@ -21,7 +21,7 @@ import { consultationsApi } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
 import { DiagnosisCard } from "@/components/doctor/DiagnosisCard";
 import { PrescriptionCard } from "@/components/doctor/PrescriptionCard";
-import type { ClinicalNoteCreatePayload } from "@/lib/types";
+import type { ClinicalNoteCreatePayload, PreAssessmentResponse } from "@/lib/types";
 
 export default function ConsultationDetailPage(): React.ReactElement {
   const params = useParams();
@@ -41,6 +41,12 @@ export default function ConsultationDetailPage(): React.ReactElement {
   const { data: visit, isLoading } = useQuery({
     queryKey: ["consultation", visitId],
     queryFn: () => consultationsApi.getConsultation(visitId),
+  });
+
+  const { data: preAssessment } = useQuery<PreAssessmentResponse>({
+    queryKey: ["pre-assessment", visitId],
+    queryFn: () => consultationsApi.getPreAssessment(visitId),
+    enabled: !!visitId,
   });
 
   const addNote = useMutation({
@@ -187,6 +193,48 @@ export default function ConsultationDetailPage(): React.ReactElement {
           </div>
         </div>
       </motion.div>
+
+      {/* Patient Pre-Assessment */}
+      {preAssessment && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          className="bg-white rounded-card border border-border p-5"
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="w-4 h-4 text-healthGreen" />
+            <h2 className="font-semibold text-mirageBlack">Patient Pre-Assessment</h2>
+          </div>
+          {preAssessment.available ? (
+            <div className="space-y-3">
+              {preAssessment.summary && (
+                <div className="p-3 bg-healthGreen/5 border border-healthGreen/20 rounded-lg">
+                  <p className="text-[10px] uppercase font-semibold text-healthGreen tracking-wider mb-1">AI Summary</p>
+                  <p className="text-sm text-mirageBlack">{preAssessment.summary}</p>
+                </div>
+              )}
+              {preAssessment.messages && preAssessment.messages.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-micro text-clinicalGrey uppercase tracking-wider">Patient Responses</p>
+                  {preAssessment.messages
+                    .filter((m) => m.role.toLowerCase() === "user")
+                    .map((m) => (
+                      <div key={m.id} className="p-3 bg-secondary/50 rounded-lg">
+                        <p className="text-sm text-mirageBlack whitespace-pre-wrap">{m.content}</p>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-start gap-3 p-3 bg-secondary/50 rounded-lg">
+              <FileText className="w-4 h-4 text-clinicalGrey mt-0.5" />
+              <p className="text-sm text-clinicalGrey">{preAssessment.reason || "No pre-assessment available."}</p>
+            </div>
+          )}
+        </motion.div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Diagnoses */}

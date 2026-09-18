@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -140,18 +140,9 @@ async def get_me(
         AllergySummaryResponse,
         ChronicConditionSummaryResponse,
         MedicalRecordSummaryResponse,
+        MedicationSummaryResponse,
+        VisitSummaryResponse,
     )
-
-    record = None
-    if patient.medical_record:
-        record = MedicalRecordSummaryResponse(
-            id=patient.medical_record.id,
-            patient_id=patient.medical_record.patient_id,
-            primary_physician_id=patient.medical_record.primary_physician_id,
-            record_status=patient.medical_record.record_status,
-            created_at=patient.medical_record.created_at,
-            updated_at=patient.medical_record.updated_at,
-        )
 
     allergies = [
         AllergySummaryResponse(
@@ -185,19 +176,50 @@ async def get_me(
         for visit in patient.medical_record.visits:
             for m in visit.medications:
                 medications.append(
-                    {
-                        "id": m.id,
-                        "visit_id": m.visit_id,
-                        "name": m.name,
-                        "dosage": m.dosage,
-                        "frequency": m.frequency,
-                        "duration": m.duration,
-                        "instructions": m.instructions,
-                        "start_date": m.start_date,
-                        "end_date": m.end_date,
-                        "created_at": m.created_at,
-                    }
+                    MedicationSummaryResponse(
+                        id=m.id,
+                        medical_record_id=patient.medical_record.id,
+                        name=m.name,
+                        dosage=m.dosage,
+                        frequency=m.frequency,
+                        duration=m.duration,
+                        instructions=m.instructions,
+                        start_date=m.start_date,
+                        end_date=m.end_date,
+                        created_at=m.created_at,
+                    )
                 )
+
+    record = None
+    if patient.medical_record:
+        visit_summaries = [
+            VisitSummaryResponse(
+                id=v.id,
+                visit_date=v.visit_date,
+                status=v.status,
+                reason=v.reason,
+                chief_complaint=v.chief_complaint,
+                facility_name=v.facility.name if v.facility else None,
+                doctor_name=(
+                    f"{v.doctor.user.first_name} {v.doctor.user.last_name}".strip()
+                    if v.doctor and v.doctor.user
+                    else None
+                ),
+            )
+            for v in patient.medical_record.visits
+        ]
+        record = MedicalRecordSummaryResponse(
+            id=patient.medical_record.id,
+            patient_id=patient.medical_record.patient_id,
+            primary_physician_id=patient.medical_record.primary_physician_id,
+            record_status=patient.medical_record.record_status,
+            created_at=patient.medical_record.created_at,
+            updated_at=patient.medical_record.updated_at,
+            allergies=allergies,
+            chronic_conditions=conditions,
+            medications=medications,
+            visits=visit_summaries,
+        )
 
     profile = PatientFullProfileResponse(
         id=patient.id,
@@ -307,11 +329,14 @@ async def get_timeline(
     # Diagnoses
     diag_result = await db.execute(
         select(Diagnosis)
+        .options(selectinload(Diagnosis.visit).selectinload(Visit.doctor).selectinload(Doctor.user))
+        .options(selectinload(Diagnosis.visit).selectinload(Visit.facility))
         .join(Visit)
         .where(Visit.medical_record_id == record.id)
         .order_by(Diagnosis.created_at.desc())
     )
     for d in diag_result.scalars().all():
+        visit = d.visit
         events.append(
             TimelineEvent(
                 event_id=d.id,
@@ -319,8 +344,12 @@ async def get_timeline(
                 date=d.created_at,
                 title=f"Diagnosis: {d.diagnosis_name}",
                 description=d.notes,
-                facility_name=None,
-                doctor_name=None,
+                facility_name=visit.facility.name if visit and visit.facility else None,
+                doctor_name=(
+                    f"{visit.doctor.user.first_name} {visit.doctor.user.last_name}".strip()
+                    if visit and visit.doctor and visit.doctor.user
+                    else None
+                ),
                 status="confirmed" if d.primary_diagnosis else "suspected",
             )
         )
@@ -328,11 +357,15 @@ async def get_timeline(
     # Medications
     med_result = await db.execute(
         select(Medication)
+        .options(selectinload(Medication.visit).selectinload(Visit.doctor).selectinload(Doctor.user))
+        .options(selectinload(Medication.visit).selectinload(Visit.facility))
         .join(Visit)
         .where(Visit.medical_record_id == record.id)
         .order_by(Medication.created_at.desc())
     )
     for m in med_result.scalars().all():
+        visit = m.visit
+        is_active = not m.end_date or m.end_date >= date.today()
         events.append(
             TimelineEvent(
                 event_id=m.id,
@@ -340,9 +373,13 @@ async def get_timeline(
                 date=m.created_at,
                 title=f"Medication: {m.name}",
                 description=m.instructions,
-                facility_name=None,
-                doctor_name=None,
-                status=None,
+                facility_name=visit.facility.name if visit and visit.facility else None,
+                doctor_name=(
+                    f"{visit.doctor.user.first_name} {visit.doctor.user.last_name}".strip()
+                    if visit and visit.doctor and visit.doctor.user
+                    else None
+                ),
+                status="active" if is_active else "completed",
             )
         )
 

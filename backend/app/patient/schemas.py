@@ -59,6 +59,17 @@ class PatientResponse(BaseModel):
     updated_at: datetime
 
 
+class VisitSummaryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    visit_date: datetime
+    status: str | None = None
+    reason: str | None = None
+    chief_complaint: str | None = None
+    facility_name: str | None = None
+    doctor_name: str | None = None
+
+
 class MedicalRecordSummaryResponse(BaseModel):
     """Lightweight medical record summary."""
 
@@ -69,6 +80,10 @@ class MedicalRecordSummaryResponse(BaseModel):
     record_status: str | None = None
     created_at: datetime
     updated_at: datetime
+    allergies: list[AllergySummaryResponse] = []
+    chronic_conditions: list[ChronicConditionSummaryResponse] = []
+    medications: list[MedicationSummaryResponse] = []
+    visits: list[VisitSummaryResponse] = []
 
 
 class AllergySummaryResponse(BaseModel):

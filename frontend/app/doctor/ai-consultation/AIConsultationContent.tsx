@@ -30,7 +30,7 @@ export default function AIConsultationContent(): React.ReactElement {
   });
 
   const createSession = useMutation({
-    mutationFn: () => aiApi.createSession(patientId || undefined),
+    mutationFn: () => aiApi.createSession({ patient_id: patientId || undefined }),
     onSuccess: (data) => {
       setSessionId(data.id);
       showToast({ title: "AI Session Started", message: "You can now chat with the AI assistant.", type: "success" });

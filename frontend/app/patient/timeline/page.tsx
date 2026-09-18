@@ -26,6 +26,7 @@ interface TimelineEntry {
   type: string;
   title: string;
   subtitle?: string | null;
+  status?: string | null;
   details?: Record<string, string | null>;
 }
 
@@ -60,12 +61,19 @@ const iconMap: Record<string, React.ElementType> = {
 };
 
 const colorMap: Record<string, string> = {
-  VISIT: "bg-celestialBlue/10 text-celestialBlue",
-  DIAGNOSIS: "bg-alertOrange/10 text-alertOrange",
-  PRESCRIPTION: "bg-healthGreen/10 text-healthGreen",
-  ALLERGY_UPDATE: "bg-alertOrange/10 text-alertOrange",
-  CONDITION: "bg-healthGreen/10 text-healthGreen",
-  AI_SESSION: "bg-healthGreen/10 text-healthGreen",
+  VISIT: "bg-celestialBlue/10 text-celestialBlue border-celestialBlue/20",
+  DIAGNOSIS: "bg-alertOrange/10 text-alertOrange border-alertOrange/20",
+  PRESCRIPTION: "bg-healthGreen/10 text-healthGreen border-healthGreen/20",
+  ALLERGY_UPDATE: "bg-errorRed/10 text-errorRed border-errorRed/20",
+  CONDITION: "bg-mirageBlack/10 text-mirageBlack border-mirageBlack/20",
+  AI_SESSION: "bg-violet-500/10 text-violet-600 border-violet-500/20",
+};
+
+const statusBadge: Record<string, { label: string; classes: string }> = {
+  suspected: { label: "Suspected", classes: "bg-alertOrange/10 text-alertOrange border-alertOrange/20" },
+  confirmed: { label: "Confirmed", classes: "bg-healthGreen/10 text-healthGreen border-healthGreen/20" },
+  active: { label: "Active", classes: "bg-healthGreen/10 text-healthGreen border-healthGreen/20" },
+  completed: { label: "Completed", classes: "bg-clinicalGrey/10 text-clinicalGrey border-clinicalGrey/20" },
 };
 
 function mapEvent(e: TimelineEvent): TimelineEntry {
@@ -84,6 +92,7 @@ function mapEvent(e: TimelineEvent): TimelineEntry {
     type: iconKey,
     title: e.title || "Unknown Event",
     subtitle: e.description || null,
+    status: e.status || null,
     details,
   };
 }
@@ -91,12 +100,13 @@ function mapEvent(e: TimelineEvent): TimelineEntry {
 function TimelineEventCard({ event }: { event: TimelineEntry }): React.ReactElement {
   const [expanded, setExpanded] = React.useState(false);
   const Icon = iconMap[event.type] || Stethoscope;
-  const colorClass = colorMap[event.type] || "bg-celestialBlue/10 text-celestialBlue";
+  const colorClass = colorMap[event.type] || "bg-celestialBlue/10 text-celestialBlue border-celestialBlue/20";
+  const statusConfig = event.status ? statusBadge[event.status.toLowerCase()] : null;
 
   return (
     <div className="relative flex gap-3">
       <div className="flex flex-col items-center">
-        <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", colorClass)}>
+        <div className={cn("w-9 h-9 rounded-full flex items-center justify-center border", colorClass)}>
           <Icon className="w-4 h-4" />
         </div>
         <div className="w-px flex-1 bg-border my-1" />
@@ -107,13 +117,27 @@ function TimelineEventCard({ event }: { event: TimelineEntry }): React.ReactElem
           className="w-full text-left bg-white border border-border rounded-card p-3 hover:shadow-elevation-1 transition-shadow"
         >
           <div className="flex items-start justify-between gap-2">
-            <div className="flex-1">
-              <p className="text-caption text-clinicalGrey">
-                {formatDate(event.date)} · {formatTime(event.date)}
-              </p>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-caption text-clinicalGrey">
+                  {formatDate(event.date)} · {formatTime(event.date)}
+                </p>
+                {statusConfig && (
+                  <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium border", statusConfig.classes)}>
+                    {statusConfig.label}
+                  </span>
+                )}
+              </div>
               <h3 className="text-body font-medium text-mirageBlack mt-0.5">{event.title}</h3>
               {event.subtitle && (
-                <p className="text-caption text-clinicalGrey mt-0.5">{event.subtitle}</p>
+                <p className="text-caption text-clinicalGrey mt-0.5 line-clamp-2">{event.subtitle}</p>
+              )}
+              {(event.details?.doctor || event.details?.facility) && (
+                <p className="text-micro text-clinicalGrey mt-1">
+                  {event.details?.doctor && <span className="text-mirageBlack">{event.details.doctor}</span>}
+                  {event.details?.doctor && event.details?.facility && <span className="mx-1">·</span>}
+                  {event.details?.facility && <span>{event.details.facility}</span>}
+                </p>
               )}
             </div>
             {event.details && Object.keys(event.details).length > 0 && (
@@ -134,7 +158,7 @@ function TimelineEventCard({ event }: { event: TimelineEntry }): React.ReactElem
             >
               <div className="mt-3 pt-3 border-t border-border space-y-2">
                 {Object.entries(event.details).map(([key, value]) =>
-                  value ? (
+                  value && key !== "doctor" && key !== "facility" && key !== "status" ? (
                     <div key={key} className="flex justify-between items-start">
                       <span className="text-caption text-clinicalGrey capitalize">
                         {key.replace(/_/g, " ")}
