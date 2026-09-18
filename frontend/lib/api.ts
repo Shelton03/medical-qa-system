@@ -63,12 +63,15 @@ function setStoredTokens(access: string, refresh: string): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(STORAGE_KEYS.accessToken, access);
   localStorage.setItem(STORAGE_KEYS.refreshToken, refresh);
+  const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toUTCString();
+  document.cookie = `access_token=${encodeURIComponent(access)}; path=/; expires=${expires}; SameSite=Lax`;
 }
 
 export function clearStoredTokens(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(STORAGE_KEYS.accessToken);
   localStorage.removeItem(STORAGE_KEYS.refreshToken);
+  document.cookie = "access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
 }
 
 function redirectToLogin(): void {
@@ -350,7 +353,7 @@ export const consentsApi = {
 
 export const consultationsApi = {
   startConsultation: (data: VisitCreatePayload): Promise<VisitResponse> =>
-    request<VisitResponse>("/consultations", {
+    request<VisitResponse>("/doctor/consultations", {
       method: "POST",
       body: JSON.stringify(data),
     }),
@@ -364,35 +367,35 @@ export const consultationsApi = {
     if (params?.status) search.set("status", params.status);
     if (params?.limit) search.set("limit", String(params.limit));
     if (params?.offset !== undefined) search.set("offset", String(params.offset));
-    return request<VisitResponse[]>(`/consultations?${search.toString()}`, { method: "GET" });
+    return request<VisitResponse[]>(`/doctor/consultations?${search.toString()}`, { method: "GET" });
   },
 
   getConsultation: (visitId: string): Promise<VisitWithDetailsResponse> =>
-    request<VisitWithDetailsResponse>(`/consultations/${visitId}`, { method: "GET" }),
+    request<VisitWithDetailsResponse>(`/doctor/consultations/${visitId}`, { method: "GET" }),
 
   addNote: (visitId: string, data: ClinicalNoteCreatePayload): Promise<ClinicalNoteResponse> =>
-    request<ClinicalNoteResponse>(`/consultations/${visitId}/notes`, {
+    request<ClinicalNoteResponse>(`/doctor/consultations/${visitId}/notes`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
   addDiagnosis: (visitId: string, data: DiagnosisCreatePayload): Promise<DiagnosisResponse> =>
-    request<DiagnosisResponse>(`/consultations/${visitId}/diagnoses`, {
+    request<DiagnosisResponse>(`/doctor/consultations/${visitId}/diagnoses`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
   addMedication: (visitId: string, data: MedicationCreatePayload): Promise<MedicationResponse> =>
-    request<MedicationResponse>(`/consultations/${visitId}/medications`, {
+    request<MedicationResponse>(`/doctor/consultations/${visitId}/medications`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
   completeConsultation: (visitId: string): Promise<VisitResponse> =>
-    request<VisitResponse>(`/consultations/${visitId}/complete`, { method: "POST", body: JSON.stringify({}) }),
+    request<VisitResponse>(`/doctor/consultations/${visitId}/complete`, { method: "POST", body: JSON.stringify({}) }),
 
   cancelConsultation: (visitId: string): Promise<VisitResponse> =>
-    request<VisitResponse>(`/consultations/${visitId}/cancel`, { method: "POST", body: JSON.stringify({}) }),
+    request<VisitResponse>(`/doctor/consultations/${visitId}/cancel`, { method: "POST", body: JSON.stringify({}) }),
 };
 
 export const aiApi = {

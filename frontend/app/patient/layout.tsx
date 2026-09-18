@@ -12,9 +12,11 @@ export default function PatientLayout({ children }: PatientLayoutProps): React.R
       {/* Header */}
       <header className="shrink-0 h-14 bg-mirageBlack flex items-center justify-between px-4">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-md bg-white/10 flex items-center justify-center">
-            <span className="text-white font-bold text-xs">M</span>
-          </div>
+          <img
+            src="/logo-icon.svg"
+            alt="Mirage"
+            className="h-7 w-auto"
+          />
           <span className="text-white font-semibold text-sm">Mirage</span>
         </div>
         <button

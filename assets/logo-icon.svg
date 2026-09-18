@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="100%" height="100%">
+  <defs>
+    <linearGradient id="iris" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6" />
+      <stop offset="55%" stop-color="#06B6D4" />
+      <stop offset="100%" stop-color="#10B981" />
+    </linearGradient>
+    <linearGradient id="lid" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0F172A" stop-opacity="0.95" />
+      <stop offset="100%" stop-color="#1E293B" stop-opacity="0.9" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Outer ring -->
+  <circle cx="48" cy="48" r="44" fill="#F8FAFC" />
+  <circle cx="48" cy="48" r="44" fill="none" stroke="#E2E8F0" stroke-width="1" />
+
+  <!-- Upper lid -->
+  <path d="M 16 50 C 16 28, 80 28, 80 50 C 80 40, 68 34, 48 34 C 28 34, 16 40, 16 50 Z" fill="url(#lid)" />
+
+  <!-- Iris -->
+  <circle cx="48" cy="52" r="16" fill="url(#iris)" />
+
+  <!-- Pupil / clarity point -->
+  <circle cx="48" cy="52" r="6" fill="#0F172A" />
+  <circle cx="51" cy="49" r="2" fill="#FFFFFF" opacity="0.9" />
+
+  <!-- Lower lid -->
+  <path d="M 16 54 C 16 72, 80 72, 80 54 C 80 62, 68 68, 48 68 C 28 68, 16 62, 16 54 Z" fill="url(#lid)" />
+</svg>

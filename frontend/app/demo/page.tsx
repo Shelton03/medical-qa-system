@@ -203,9 +203,11 @@ export default function DemoPage(): React.ReactElement {
       {/* Top Header */}
       <div className="h-12 bg-mirageBlack flex items-center justify-between px-4 shrink-0 z-20">
         <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-md bg-white/10 flex items-center justify-center">
-            <span className="text-white font-bold text-xs">M</span>
-          </div>
+          <img
+            src="/logo-icon.svg"
+            alt="Mirage"
+            className="h-7 w-auto"
+          />
           <h1 className="text-sm font-semibold text-white">Mirage Healthathon Demo</h1>
           <span className="text-[10px] text-white/50 hidden sm:inline">Press Space to play/pause · → next · ← prev · N narration · R reset</span>
         </div>

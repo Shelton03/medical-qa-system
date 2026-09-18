@@ -145,7 +145,7 @@ The API client automatically attaches the `Authorization` header and refreshes e
 
 ### WebSocket
 
-Real-time notifications via `WebSocketProvider` at `ws://localhost:8000/ws/notifications`.
+Real-time notifications via `WebSocketProvider` at `ws://localhost:8002/ws/notifications`.
 Events: `CONSENT_REQUESTED`, `CONSENT_APPROVED`, `NOTIFICATION_CREATED`, etc.
 
 ---

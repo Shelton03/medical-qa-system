@@ -52,9 +52,11 @@ export default function PatientLoginPage(): React.ReactElement {
         className="w-full max-w-sm"
       >
         <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-xl bg-mirageBlack flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-bold text-xl">M</span>
-          </div>
+          <img
+            src="/logo-icon.svg"
+            alt="Mirage"
+            className="h-14 w-auto mx-auto mb-4"
+          />
           <h1 className="text-2xl font-bold text-mirageBlack">Patient Access</h1>
           <p className="text-clinicalGrey mt-1">Sign in with your National ID</p>
         </div>

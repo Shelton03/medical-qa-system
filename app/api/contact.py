@@ -1,6 +1,9 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel, EmailStr
 from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.api.deps import get_db_session_dep
+from app.db.repositories import ContactRepository
 
 router = APIRouter()
 
@@ -10,30 +13,22 @@ class ContactRequest(BaseModel):
     message: str
 
 @router.post("/contact", response_model=dict)
-async def submit_contact(request: ContactRequest):
+async def submit_contact(
+    request: ContactRequest,
+    db: AsyncSession = Depends(get_db_session_dep),
+):
     try:
-        from motor.motor_asyncio import AsyncIOMotorClient
-        from app.core.config import settings
-        from datetime import datetime
-        
-        client = AsyncIOMotorClient(settings.MONGODB_URI)
-        db = client[settings.MONGODB_DB_NAME]
-        contact_collection = db["contacts"]
-        
-        contact = {
-            "name": request.name,
-            "email": request.email,
-            "message": request.message,
-            "created_at": datetime.utcnow()
-        }
-        
-        result = await contact_collection.insert_one(contact)
-        await client.close()
-        
+        contact_repo = ContactRepository(db)
+        contact_id = await contact_repo.add_contact(
+            request.name, request.email, request.message
+        )
+        await db.commit()
+
         return {
             "success": True,
             "message": "Contact message submitted successfully",
-            "contact_id": str(result.inserted_id)
+            "contact_id": str(contact_id)
         }
     except Exception as e:
+        await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

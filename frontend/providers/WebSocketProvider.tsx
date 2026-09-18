@@ -5,7 +5,10 @@ import { WebSocketContext } from "@/hooks/useWebSocket";
 import { notificationsApi } from "@/lib/api";
 import type { ConsentStatus, NotificationResponse, WsEvent } from "@/lib/types";
 
-const WS_URL = "ws://localhost:8000/ws/notifications";
+const WS_URL =
+  typeof process !== "undefined" && process.env.NEXT_PUBLIC_WS_URL
+    ? process.env.NEXT_PUBLIC_WS_URL
+    : "ws://localhost:8002/ws/notifications";
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000];
 const HEARTBEAT_INTERVAL = 30000;
 
@@ -24,8 +27,10 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }): 
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
 
-  // Fetch initial notifications
+  // Fetch initial notifications only when authenticated
   useEffect(() => {
+    const token = getStoredAccessToken();
+    if (!token) return;
     notificationsApi.listNotifications({ unread_only: false, limit: 50 }).then((data) => {
       if (isMountedRef.current) {
         setNotifications(data.items);

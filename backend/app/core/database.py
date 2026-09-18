@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
 from app.core.config import settings
@@ -20,6 +21,8 @@ async def get_db() -> AsyncSession:
 
 
 async def init_db() -> None:
-    """Create all tables if they do not exist."""
+    """Create all tables if AUTO_CREATE_TABLES is set (default: rely on migrations)."""
+    if os.getenv("AUTO_CREATE_TABLES", "false").lower() != "true":
+        return
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

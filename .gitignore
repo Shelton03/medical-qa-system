@@ -4,6 +4,7 @@ __pycache__/
 *.log
 .next/
 backend.log
+alembic_archives/
 
 # AI session logs and stray files
 session-ses_*.md

@@ -1,5 +1,9 @@
 # Mirage
 
+<p align="center">
+  <img src="assets/logo-light.svg" alt="Mirage — Clarity in Healthcare" width="320">
+</p>
+
 **Mirage** is a healthcare platform designed to improve patient-doctor interactions through secure, real-time collaboration and AI-assisted clinical workflows. Built as a Healthathon demonstration platform, Mirage showcases a production-quality architecture ready for future expansion.
 
 ---
@@ -38,10 +42,11 @@ Mirage follows a clean five-layer architecture:
 
 | Service   | Port | Description                           |
 |-----------|------|---------------------------------------|
-| Frontend  | 3000 | Next.js dev server (hot reload)       |
-| Backend   | 8000 | FastAPI dev server (auto-reload)      |
-| PostgreSQL| 5432 | Persistent database (`mirage_dev`)    |
+| Frontend  | 3000 | Static chat UI (nginx)                |
+| Backend   | 8001 | FastAPI server (auto-reload)          |
+| PostgreSQL| 5433 | Persistent database (`mirage_dev`)    |
 | Redis     | 6379 | Cache, Pub/Sub, event broker          |
+| MinIO     | 9000 | S3-compatible object storage          |
 
 ---
 
@@ -60,8 +65,8 @@ make migrate
 
 The application will be available at:
 - **Frontend** → http://localhost:3000
-- **Backend API** → http://localhost:8000
-- **API Docs** → http://localhost:8000/docs
+- **Backend API** → http://localhost:8001
+- **API Docs** → http://localhost:8001/docs
 
 ---
 
@@ -75,18 +80,18 @@ The application will be available at:
 | `make logs`       | Follow container logs                  |
 | `make migrate`    | Run Alembic migrations (`upgrade head`)|
 | `make shell-backend` | Open a shell in the backend container |
-| `make shell-frontend` | Open a shell in the frontend container|
-| `make test`       | Run the backend test suite             |
+| `make test`       | Run the migration smoke test           |
 
 ---
 
 ## Technology Stack
 
 - **Backend:** Python 3.12+, FastAPI, SQLAlchemy 2.x, Alembic, asyncpg, Pydantic
-- **Frontend:** Next.js 14+ (App Router), TypeScript, TailwindCSS
-- **Database:** PostgreSQL 16+ (UUID primary keys, UTC timestamps)
+- **Frontend:** HTML5 / vanilla JavaScript served by nginx
+- **Database:** PostgreSQL 16+
+- **Object Storage:** MinIO (S3-compatible)
 - **Cache / Events:** Redis 7
-- **Authentication:** JWT + Demo Mode
+- **Authentication:** JWT
 - **Infrastructure:** Docker, Docker Compose
 
 ---

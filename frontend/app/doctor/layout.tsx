@@ -37,9 +37,11 @@ export default function DoctorLayout({ children }: DoctorLayoutProps): React.Rea
       <aside className="w-64 shrink-0 border-r border-border bg-white flex flex-col">
         {/* Brand */}
         <div className="h-16 flex items-center px-6 border-b border-border">
-          <div className="w-8 h-8 rounded-md bg-mirageBlack flex items-center justify-center mr-3">
-            <span className="text-white font-bold text-sm">M</span>
-          </div>
+          <img
+            src="/logo-icon.svg"
+            alt="Mirage"
+            className="h-8 w-auto mr-3"
+          />
           <span className="font-heading font-bold text-mirageBlack text-page-title">
             Mirage
           </span>

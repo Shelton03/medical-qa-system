@@ -6,8 +6,12 @@ export default function LandingPage(): React.ReactElement {
       {/* Hero Section */}
       <section className="flex-1 flex items-center justify-center px-6 py-20">
         <div className="max-w-3xl mx-auto text-center">
-          <div className="w-16 h-16 rounded-2xl bg-mirageBlack flex items-center justify-center mx-auto mb-8">
-            <span className="text-white font-bold text-2xl">M</span>
+          <div className="flex justify-center mb-8">
+            <img
+              src="/logo.svg"
+              alt="Mirage"
+              className="h-16 w-auto"
+            />
           </div>
           <h1 className="text-display text-mirageBlack mb-6">
             Mirage Healthcare Platform

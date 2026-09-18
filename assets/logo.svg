@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 120" width="100%" height="100%">
+  <defs>
+    <linearGradient id="waveTop" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#06B6D4" />
+    </linearGradient>
+    <linearGradient id="waveMid" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#06B6D4" />
+      <stop offset="100%" stop-color="#10B981" />
+    </linearGradient>
+    <linearGradient id="waveBot" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0F172A" />
+      <stop offset="100%" stop-color="#1E293B" />
+    </linearGradient>
+  </defs>
+
+  <!-- Logo Mark -->
+  <g transform="translate(14, 24)">
+    <!-- Three symmetrical horizon waves forming an eye -->
+    <path d="M 10 34 C 30 18, 62 18, 82 34 C 62 42, 30 42, 10 34 Z" fill="url(#waveTop)" opacity="0.9"/>
+    <path d="M 6 48 C 28 32, 64 32, 86 48 C 64 56, 28 56, 6 48 Z" fill="url(#waveMid)" opacity="0.95"/>
+    <path d="M 10 62 C 30 54, 62 54, 82 62 C 62 74, 30 74, 10 62 Z" fill="url(#waveBot)" opacity="0.95"/>
+    
+    <!-- Clarity point / pupil -->
+    <circle cx="46" cy="48" r="5" fill="#FFFFFF"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="118" y="66" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="46" font-weight="800" fill="#0F172A" letter-spacing="0.5">
+    MIRAGE
+  </text>
+
+  <!-- Tagline -->
+  <text x="120" y="90" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600" fill="#06B6D4" letter-spacing="2">
+    CLARITY IN HEALTHCARE
+  </text>
+</svg>

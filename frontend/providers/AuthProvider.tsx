@@ -30,6 +30,8 @@ function storeTokens(access: string, refresh: string): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(STORAGE_KEYS.accessToken, access);
   localStorage.setItem(STORAGE_KEYS.refreshToken, refresh);
+  const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toUTCString();
+  document.cookie = `access_token=${encodeURIComponent(access)}; path=/; expires=${expires}; SameSite=Lax`;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }): React.ReactElement {
