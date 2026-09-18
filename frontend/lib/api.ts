@@ -141,15 +141,19 @@ export function clearStoredTokens(): void {
 function redirectToLogin(): void {
   if (typeof window === "undefined") return;
   const path = window.location.pathname;
+  let target: string | null = null;
   if (path.startsWith("/doctor")) {
-    window.location.href = "/doctor/login";
+    target = "/doctor/login";
   } else if (path.startsWith("/patient")) {
-    window.location.href = "/patient/login";
+    target = "/patient/login";
   } else if (path.startsWith("/admin")) {
-    window.location.href = "/admin/login";
-  } else {
-    window.location.href = "/";
+    target = "/admin/login";
   }
+  // Only redirect when we are inside a protected route area and not already
+  // on the target login page. Public pages (/, /demo, etc.) should stay put
+  // and let the UI handle the expired session gracefully.
+  if (!target || path === target) return;
+  window.location.href = target;
 }
 
 // ------------------------------------------------------------------

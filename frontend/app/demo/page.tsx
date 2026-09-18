@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import dynamic from "next/dynamic";
+import { PhoneFrame } from "@/components/phone-frame/PhoneFrame";
 import {
   Play,
   Pause,
@@ -13,11 +13,6 @@ import {
   ChevronDown,
   Mic,
 } from "lucide-react";
-
-const PhoneFrame = dynamic(
-  () => import("@/components/phone-frame/PhoneFrame").then((mod) => mod.PhoneFrame),
-  { ssr: false }
-);
 
 // ------------------------------------------------------------------
 // Demo Script — 10-step Healthathon flow

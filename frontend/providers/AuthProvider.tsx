@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   authApi,
@@ -28,9 +28,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
     role: null,
   });
 
+  const roleRef = useRef<UserRole | null>(null);
+
   const hydrateUser = useCallback(async () => {
     try {
       const profile = await authApi.getMe();
+      roleRef.current = profile.role;
       setState({
         user: profile,
         isLoading: false,
@@ -39,6 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       });
     } catch {
       clearStoredTokens();
+      roleRef.current = null;
       setState({
         user: null,
         isLoading: false,
@@ -57,6 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
     }
     try {
       const profile = await authApi.getMe();
+      roleRef.current = profile.role;
       setState({
         user: profile,
         isLoading: false,
@@ -67,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       if (refresh) {
         try {
           const refreshed = await authApi.refreshToken(refresh);
-          const role = state.role ?? "doctor";
+          const role = roleRef.current ?? "doctor";
           setStoredTokens(role, refreshed.access_token, refresh);
           await hydrateUser();
           return;
@@ -76,6 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
         }
       }
       clearStoredTokens();
+      roleRef.current = null;
       setState({
         user: null,
         isLoading: false,
@@ -83,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
         role: null,
       });
     }
-  }, [hydrateUser, state.role]);
+  }, [hydrateUser]);
 
   useEffect(() => {
     checkAuth();
@@ -163,6 +169,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       // Ignore logout errors
     } finally {
       clearStoredTokens();
+      roleRef.current = null;
       setState({
         user: null,
         isLoading: false,
@@ -173,16 +180,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
     }
   }, [router]);
 
-  const value = {
-    user: state.user,
-    isLoading: state.isLoading,
-    isAuthenticated: state.isAuthenticated,
-    role: state.role,
-    loginDoctor,
-    loginAdmin,
-    loginPatient,
-    logout,
-  };
+  const value = useMemo(
+    () => ({
+      user: state.user,
+      isLoading: state.isLoading,
+      isAuthenticated: state.isAuthenticated,
+      role: state.role,
+      loginDoctor,
+      loginAdmin,
+      loginPatient,
+      logout,
+    }),
+    [state.user, state.isLoading, state.isAuthenticated, state.role, loginDoctor, loginAdmin, loginPatient, logout]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
