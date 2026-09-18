@@ -55,7 +55,7 @@ class AuditListResponse(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 @router.get(
-    "/",
+    "",
     response_model=Envelope[AuditListResponse],
     summary="List audit logs with pagination and filtering",
 )

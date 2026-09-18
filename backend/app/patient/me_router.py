@@ -122,7 +122,7 @@ def _patient_response(patient: Patient) -> PatientResponse:
 # Endpoints
 # ---------------------------------------------------------------------------
 @router.get(
-    "/",
+    "",
     response_model=Envelope[PatientFullProfileResponse],
     summary="Current patient profile",
 )
@@ -247,7 +247,7 @@ async def get_me(
 
 
 @router.put(
-    "/",
+    "",
     response_model=Envelope[PatientResponse],
     summary="Update current patient profile",
 )
