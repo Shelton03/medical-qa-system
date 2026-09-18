@@ -12,6 +12,7 @@ import {
   Activity,
   User,
   AlertTriangle,
+  CalendarPlus,
 } from "lucide-react";
 import { patientsApi, notificationsApi } from "@/lib/api";
 import { LoadingSkeleton } from "@/components/ui/LoadingSkeleton";
@@ -49,6 +50,13 @@ export default function PatientHomePage(): React.ReactElement {
   const medications = profile?.medical_record?.medications ?? [];
 
   const quickActions = [
+    {
+      href: "/patient/book-appointment",
+      label: "Book Appointment",
+      description: "Schedule a visit with a doctor",
+      icon: CalendarPlus,
+      color: "bg-celestialBlue/10 text-celestialBlue",
+    },
     {
       href: "/patient/consent",
       label: "Pending Consents",

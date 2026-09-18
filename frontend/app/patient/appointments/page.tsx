@@ -122,13 +122,21 @@ export default function AppointmentsListPage(): React.ReactElement {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
+        className="flex items-end justify-between gap-4"
       >
-        <h1 className="text-page-title font-heading text-mirageBlack">
-          My Appointments
-        </h1>
-        <p className="text-caption text-clinicalGrey">
-          View and manage your appointments
-        </p>
+        <div>
+          <h1 className="text-page-title font-heading text-mirageBlack">
+            My Appointments
+          </h1>
+          <p className="text-caption text-clinicalGrey">
+            View and manage your appointments
+          </p>
+        </div>
+        <Link href="/patient/book-appointment">
+          <button className="px-4 py-2 bg-celestialBlue text-white rounded-button text-caption font-medium hover:bg-celestialBlue-600 transition-colors min-h-[40px] whitespace-nowrap">
+            + Book
+          </button>
+        </Link>
       </motion.div>
 
       {/* Tabs */}
