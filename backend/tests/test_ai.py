@@ -20,10 +20,39 @@ async def test_create_ai_session(client: AsyncClient, demo_doctor_token: str) ->
 
 
 @pytest.mark.asyncio
+async def test_create_ai_session_as_patient(client: AsyncClient, demo_patient_token: str) -> None:
+    """Patients can now create their own AI sessions."""
+    response = await client.post(
+        "/api/v1/ai/sessions",
+        headers={"Authorization": f"Bearer {demo_patient_token}"},
+        json={},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert "id" in data["data"]
+    assert data["data"]["patient_id"] is not None
+    assert data["data"]["doctor_id"] is None
+
+
+@pytest.mark.asyncio
 async def test_list_ai_sessions(client: AsyncClient, demo_doctor_token: str) -> None:
     response = await client.get(
         "/api/v1/ai/sessions",
         headers={"Authorization": f"Bearer {demo_doctor_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert isinstance(data["data"], list)
+
+
+@pytest.mark.asyncio
+async def test_list_ai_sessions_as_patient(client: AsyncClient, demo_patient_token: str) -> None:
+    """Patients can list their own AI sessions."""
+    response = await client.get(
+        "/api/v1/ai/sessions",
+        headers={"Authorization": f"Bearer {demo_patient_token}"},
     )
     assert response.status_code == 200
     data = response.json()
@@ -59,12 +88,3 @@ async def test_ai_complete_not_found(client: AsyncClient, demo_doctor_token: str
         headers={"Authorization": f"Bearer {demo_doctor_token}"},
     )
     assert response.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_ai_forbidden_for_patient(client: AsyncClient, demo_patient_token: str) -> None:
-    response = await client.get(
-        "/api/v1/ai/sessions",
-        headers={"Authorization": f"Bearer {demo_patient_token}"},
-    )
-    assert response.status_code == 403

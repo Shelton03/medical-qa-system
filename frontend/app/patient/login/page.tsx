@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
@@ -14,15 +14,17 @@ export default function PatientLoginPage(): React.ReactElement {
   const [nationalId, setNationalId] = useState("");
   const [pin, setPin] = useState("");
   const [showPin, setShowPin] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const demoSubmitScheduled = useRef(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("demo") === "1") {
+    if (params.get("demo") === "1" && !demoSubmitScheduled.current) {
+      demoSubmitScheduled.current = true;
       setNationalId(DEMO_NATIONAL_ID);
       setPin(DEMO_PIN);
       const timer = setTimeout(() => {
-        const form = document.querySelector("form");
-        if (form) form.requestSubmit();
+        formRef.current?.requestSubmit();
       }, 1500);
       return () => clearTimeout(timer);
     }
@@ -61,7 +63,7 @@ export default function PatientLoginPage(): React.ReactElement {
           <p className="text-clinicalGrey mt-1">Sign in with your National ID</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-mirageBlack mb-1">National ID</label>
             <input

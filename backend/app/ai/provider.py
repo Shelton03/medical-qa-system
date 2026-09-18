@@ -23,6 +23,18 @@ class AIMessage:
 
 
 @dataclass
+class PatientClinicalProfile:
+    """Structured clinical snapshot for AI context enrichment."""
+
+    demographics: dict | None = None
+    allergies: list[dict] = field(default_factory=list)
+    chronic_conditions: list[dict] = field(default_factory=list)
+    current_medications: list[dict] = field(default_factory=list)
+    recent_visits: list[dict] = field(default_factory=list)
+    previous_ai_sessions: list[dict] = field(default_factory=list)
+
+
+@dataclass
 class AIContext:
     """Context provided to an AI provider for a given session."""
 
@@ -30,6 +42,7 @@ class AIContext:
     doctor_id: UUID | None = None
     session_id: UUID | None = None
     available_data: list[str] = field(default_factory=list)
+    clinical_profile: PatientClinicalProfile | None = None
 
 
 class AIProvider(abc.ABC):

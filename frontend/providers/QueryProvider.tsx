@@ -10,8 +10,17 @@ export function QueryProvider({ children }: { children: React.ReactNode }): Reac
         defaultOptions: {
           queries: {
             staleTime: 30 * 1000,
-            refetchOnWindowFocus: true,
-            retry: 1,
+            refetchOnWindowFocus: false,
+            retry: (failureCount, error) => {
+              // Don't retry on 401 (Unauthorized) or 403 (Forbidden)
+              if (error instanceof Error && (error as { status?: number }).status === 401) {
+                return false;
+              }
+              if (error instanceof Error && (error as { status?: number }).status === 403) {
+                return false;
+              }
+              return failureCount < 1;
+            },
             retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
           },
           mutations: {

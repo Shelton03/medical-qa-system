@@ -50,7 +50,12 @@ async def create_visit(
     db.add(visit)
     await db.flush()
     await db.refresh(visit)
-    return visit
+    result = await db.execute(
+        select(Visit)
+        .options(selectinload(Visit.medical_record))
+        .where(Visit.id == visit.id)
+    )
+    return result.scalar_one()
 
 
 async def get_visit_by_id(db: AsyncSession, visit_id: uuid.UUID) -> Visit | None:
@@ -129,6 +134,22 @@ async def update_visit_status(
     if visit is None:
         return None
     visit.status = status
+    db.add(visit)
+    await db.flush()
+    await db.refresh(visit)
+    return visit
+
+
+async def update_visit_transcript(
+    db: AsyncSession,
+    visit_id: uuid.UUID,
+    transcript: str,
+) -> Visit | None:
+    """Update the transcript field of a visit."""
+    visit = await get_visit_by_id(db, visit_id)
+    if visit is None:
+        return None
+    visit.transcript = transcript
     db.add(visit)
     await db.flush()
     await db.refresh(visit)
@@ -261,18 +282,9 @@ async def list_medications_for_visit(
     db: AsyncSession,
     visit_id: uuid.UUID,
 ) -> list[LegacyMedication]:
-    """Return medications for the patient linked to the visit."""
-    visit_result = await db.execute(
-        select(Visit.medical_record_id).where(Visit.id == visit_id)
-    )
-    medical_record_id = visit_result.scalar_one_or_none()
-    if not medical_record_id:
-        return []
-
+    """Return medications prescribed during a specific visit."""
     result = await db.execute(
-        select(LegacyMedication).where(
-            LegacyMedication.medical_record_id == medical_record_id
-        )
+        select(LegacyMedication).where(LegacyMedication.visit_id == visit_id)
     )
     return list(result.scalars().all())
 

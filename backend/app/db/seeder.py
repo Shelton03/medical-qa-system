@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -27,6 +27,8 @@ from app.db.models import (
     Notification,
     AuditLog,
     AISession,
+    DoctorSchedule,
+    Appointment,
 )
 
 DEMO_DOCTOR_EMAIL = "dr.sarah.mirage@mirage.health"
@@ -100,6 +102,38 @@ _DOCTORS = [
         "email": "dr.s.guvamombe@mirage.health",
         "specialty": "Internal Medicine",
         "reg": "MED56789",
+        "user_id": None,
+    },
+    {
+        "first_name": "Farai",
+        "last_name": "Dube",
+        "email": "dr.f.dube@mirage.health",
+        "specialty": "Dermatology",
+        "reg": "MED67890",
+        "user_id": None,
+    },
+    {
+        "first_name": "Ruvimbo",
+        "last_name": "Mucheka",
+        "email": "dr.r.mucheka@mirage.health",
+        "specialty": "Psychiatry",
+        "reg": "MED78901",
+        "user_id": None,
+    },
+    {
+        "first_name": "Shingirai",
+        "last_name": "Nkomo",
+        "email": "dr.s.nkomo@mirage.health",
+        "specialty": "Orthopedics",
+        "reg": "MED89012",
+        "user_id": None,
+    },
+    {
+        "first_name": "Netsai",
+        "last_name": "Mupfumi",
+        "email": "dr.netsai.mupfumi@mirage.health",
+        "specialty": "Radiology",
+        "reg": "MED90123",
         "user_id": None,
     },
 ]
@@ -363,6 +397,7 @@ async def _get_or_create_doctor(
         registration_number=registration_number,
         specialty=specialty,
         facility_id=facility_id,
+        is_accepting_appointments=True,
     )
     db.add(doctor)
     await db.flush()
@@ -513,9 +548,9 @@ async def seed_demo_data(db: AsyncSession) -> None:
         await db.flush()
         facilities.append(facility)
 
-    # Seed doctors
+    # Seed doctors (round-robin across facilities)
     doctors = []
-    for d_data in _DOCTORS:
+    for idx, d_data in enumerate(_DOCTORS):
         user = await _get_or_create_user(
             db,
             email=d_data["email"],
@@ -526,7 +561,7 @@ async def seed_demo_data(db: AsyncSession) -> None:
             phone_number="+263-772-000000",
             user_id=d_data["user_id"],
         )
-        facility = random.choice(facilities)
+        facility = facilities[idx % len(facilities)]
         doctor = await _get_or_create_doctor(
             db,
             user=user,
@@ -536,6 +571,36 @@ async def seed_demo_data(db: AsyncSession) -> None:
             facility_id=facility.id,
         )
         doctors.append(doctor)
+    await db.flush()
+
+    # Ensure every doctor has a schedule (Mon-Sun), idempotent per doctor
+    for doctor in doctors:
+        existing_days = set()
+        result = await db.execute(
+            select(DoctorSchedule.day_of_week).where(DoctorSchedule.doctor_id == doctor.id)
+        )
+        existing_days = {row[0] for row in result.all()}
+        for day in range(7):
+            if day in existing_days:
+                continue
+            if day in (5, 6):  # weekend half-day
+                start = time(8, 0)
+                end = time(13, 0)
+            else:
+                start = time(8, 0)
+                end = time(17, 0)
+            schedule = DoctorSchedule(
+                id=uuid.uuid4(),
+                doctor_id=doctor.id,
+                day_of_week=day,
+                start_time=start,
+                end_time=end,
+                max_daily_appointments=20,
+                default_slot_duration=30,
+                is_working_day=True,
+            )
+            db.add(schedule)
+        await db.flush()
 
     # Seed patients
     patients = []
@@ -797,7 +862,7 @@ async def seed_demo_data(db: AsyncSession) -> None:
         imaging_created += 1
 
     # Consent requests
-    consent_statuses = ["PENDING", "APPROVED", "DENIED", "EXPIRED"]
+    consent_statuses = ["pending", "approved", "declined", "expired"]
     for _ in range(target_consents):
         patient, user, record = random.choice(patients)
         doctor = random.choice(doctors)
@@ -806,12 +871,12 @@ async def seed_demo_data(db: AsyncSession) -> None:
         approved_at = None
         expires_at = None
         denied_reason = None
-        if status == "APPROVED":
+        if status == "approved":
             approved_at = requested_at + timedelta(hours=random.randint(1, 24))
             expires_at = approved_at + timedelta(days=30)
-        elif status == "DENIED":
+        elif status == "declined":
             denied_reason = "Patient declined access."
-        elif status == "EXPIRED":
+        elif status == "expired":
             approved_at = requested_at + timedelta(hours=2)
             expires_at = datetime.now() - timedelta(days=1)
         db.add(
@@ -889,4 +954,59 @@ async def seed_demo_data(db: AsyncSession) -> None:
             )
         )
 
+    await db.commit()
+
+
+async def seed_appointments(db: AsyncSession) -> None:
+    """Seed demo appointments for doctors if absent."""
+    from sqlalchemy import func
+
+    count_result = await db.execute(select(func.count(Appointment.id)))
+    if count_result.scalar_one() >= 10:
+        return  # Already seeded
+
+    # Load existing doctors and patients
+    doctors_result = await db.execute(select(Doctor))
+    doctors = doctors_result.scalars().all()
+    if not doctors:
+        return  # Cannot seed appointments without doctors
+
+    patients_result = await db.execute(select(Patient))
+    patients = patients_result.scalars().all()
+    if not patients:
+        return  # Cannot seed appointments without patients
+
+    appointment_statuses = ["PENDING", "CONFIRMED"]
+    for doctor in doctors:
+        num_appts = random.randint(3, 8)
+        for _ in range(num_appts):
+            patient = random.choice(patients)
+            appt_date = date.today() + timedelta(days=random.randint(-2, 14))
+            start_hour = random.randint(8, 15)
+            start_minute = random.choice([0, 30])
+            start = time(start_hour, start_minute)
+            end = time(start_hour, start_minute + 30) if start_minute == 0 else time(start_hour + 1, 0)
+
+            appt = Appointment(
+                id=uuid.uuid4(),
+                patient_id=patient.id,
+                doctor_id=doctor.id,
+                facility_id=doctor.facility_id,
+                appointment_date=appt_date,
+                allocated_start_time=start,
+                allocated_end_time=end,
+                desired_duration_minutes=30,
+                status=random.choice(appointment_statuses),
+                symptoms=random.choice([
+                    "Headache and dizziness",
+                    "Chest pain on exertion",
+                    "Skin rash with itching",
+                    "Persistent cough",
+                    "Abdominal pain",
+                ]),
+                reason=random.choice(["routine", "follow-up", "urgent"]),
+                priority="NORMAL",
+                triage_score=random.randint(40, 70),
+            )
+            db.add(appt)
     await db.commit()

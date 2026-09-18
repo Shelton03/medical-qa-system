@@ -1,7 +1,7 @@
 # Mirage
 # API Contract
 
-Version: 1.0
+Version: 1.0.4
 
 ---
 
@@ -907,6 +907,24 @@ Job ID.
 
 ---
 
+## PATCH /doctor/{visitId}/transcript
+
+**Description:** Update the transcript field for a visit. Used to persist voice transcription output.
+
+**Authentication:** Doctor JWT token required.
+
+**Request Body:**
+Plain text string (raw body, not JSON). The full transcript text.
+
+**Response:**
+Envelope<VisitResponse>
+
+**Errors:**
+VISIT_NOT_FOUND — The visit does not exist.
+FORBIDDEN — The current user is not the assigned doctor for this visit.
+
+---
+
 # Consent API
 
 ---
@@ -1474,9 +1492,47 @@ Endpoint
 
 Authentication
 
-JWT during connection establishment.
+Clients authenticate by sending an `auth` action message within 5 seconds of connection establishment. The JWT is not sent in the query string.
+
+```json
+{
+  "action": "auth",
+  "token": "<JWT>"
+}
+```
+
+If authentication succeeds, the server responds with:
+
+```json
+{
+  "type": "authenticated",
+  "payload": {
+    "user_id": "uuid"
+  },
+  "timestamp": "..."
+}
+```
+
+If authentication fails or times out, the server responds with:
+
+```json
+{
+  "type": "error",
+  "payload": {
+    "code": 4001,
+    "message": "..."
+  },
+  "timestamp": "..."
+}
+```
+
+then closes the connection with close code `4001`.
 
 After authentication, the client subscribes to one or more channels.
+
+Heartbeats
+
+The client should send an `{"action": "ping"}` message every 30 seconds. The server acknowledges with `pong` and has a 45-second receive timeout.
 
 Examples
 
@@ -1491,6 +1547,33 @@ consultations
 
 dashboard
 ```
+
+---
+
+## /ws/transcription
+
+**Description:** Real-time speech-to-text transcription via WebSocket. Uses faster-whisper locally. Streams 100ms webm/opus audio chunks and receives partial/final transcripts.
+
+**Authentication:** JWT token via query parameter `?token=<JWT>`.
+
+**Input:** Binary audio chunks (webm/opus from browser MediaRecorder).
+
+**Output Messages:**
+- `{"text": "...", "is_final": false}` — Interim transcript.
+- `{"text": "...", "is_final": true}` — Final transcript segment.
+- `{"type": "pong"}` — Heartbeat response.
+
+**Flow:**
+1. Client opens WebSocket with auth token.
+2. Client starts MediaRecorder with 100ms chunks.
+3. Client sends binary audio chunks to WebSocket.
+4. Server buffers chunks, flushes to Whisper when ≥10 chunks or ≥16 KB.
+5. Server sends interim transcripts as JSON.
+6. Server detects sentence endings (`.`, `?`, `!`) and marks `is_final: true`.
+7. Client sends `{"action": "stop"}` when recording stops.
+8. Server sends final transcript and closes WebSocket.
+
+**Env Configuration:** `NEXT_PUBLIC_WS_URL` (frontend), `TRANSCRIPTION_PROVIDER=local` (backend).
 
 ---
 

@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import inspect
 
 from app.db.models import (
     AuditLog,
@@ -81,26 +82,26 @@ async def start_consultation(
             "Medical record not found for patient.", error_code="RECORD_NOT_FOUND"
         )
 
-    async with db.begin():
-        visit = await repository.create_visit(
-            db,
-            medical_record_id=medical_record_id,
-            doctor_id=doctor_id,
-            facility_id=data.facility_id,
-            chief_complaint=data.chief_complaint,
-            reason=data.reason,
-        )
-        await _write_audit_log(
-            db,
-            user_id=doctor_id,
-            action="CONSULTATION_STARTED",
-            resource_type="Visit",
-            resource_id=visit.id,
-            metadata={
-                "patient_id": str(data.patient_id),
-                "chief_complaint": data.chief_complaint,
-            },
-        )
+    visit = await repository.create_visit(
+        db,
+        medical_record_id=medical_record_id,
+        doctor_id=doctor_id,
+        facility_id=data.facility_id,
+        chief_complaint=data.chief_complaint,
+        reason=data.reason,
+    )
+    await db.flush()
+    await _write_audit_log(
+        db,
+        user_id=doctor_id,
+        action="CONSULTATION_STARTED",
+        resource_type="Visit",
+        resource_id=visit.id,
+        metadata={
+            "patient_id": str(data.patient_id),
+            "chief_complaint": data.chief_complaint,
+        },
+    )
     await emit_ws_event(
         f"patient:{data.patient_id}",
         WSEventType.CONSULTATION_STARTED,
@@ -196,17 +197,17 @@ async def complete_consultation(
             f"Cannot complete a visit with status {visit.status}."
         )
 
-    async with db.begin():
-        visit = await repository.update_visit_status(db, visit_id, "completed")
-        if not visit:
-            raise NotFoundException("Visit not found.", error_code="VISIT_NOT_FOUND")
-        await _write_audit_log(
-            db,
-            user_id=doctor_id,
-            action="CONSULTATION_COMPLETED",
-            resource_type="Visit",
-            resource_id=visit.id,
-        )
+    visit = await repository.update_visit_status(db, visit_id, "completed")
+    if not visit:
+        raise NotFoundException("Visit not found.", error_code="VISIT_NOT_FOUND")
+    await db.flush()
+    await _write_audit_log(
+        db,
+        user_id=doctor_id,
+        action="CONSULTATION_COMPLETED",
+        resource_type="Visit",
+        resource_id=visit.id,
+    )
     if visit.medical_record:
         await emit_ws_event(
             f"patient:{visit.medical_record.patient_id}",
@@ -219,6 +220,22 @@ async def complete_consultation(
             },
         )
     return visit
+
+
+async def update_visit_transcript(
+    db: AsyncSession,
+    visit_id: uuid.UUID,
+    doctor_id: uuid.UUID,
+    transcript: str,
+) -> Visit:
+    """Update the transcript of a visit."""
+    visit = await repository.get_visit_by_id(db, visit_id)
+    if not visit:
+        raise NotFoundException("Visit not found.", error_code="VISIT_NOT_FOUND")
+    if visit.doctor_id != doctor_id:
+        raise ForbiddenException("You are not the doctor for this visit.")
+
+    return await repository.update_visit_transcript(db, visit_id, transcript)
 
 
 async def cancel_consultation(
@@ -237,17 +254,17 @@ async def cancel_consultation(
             f"Cannot cancel a visit with status {visit.status}."
         )
 
-    async with db.begin():
-        visit = await repository.update_visit_status(db, visit_id, "cancelled")
-        if not visit:
-            raise NotFoundException("Visit not found.", error_code="VISIT_NOT_FOUND")
-        await _write_audit_log(
-            db,
-            user_id=doctor_id,
-            action="CONSULTATION_CANCELLED",
-            resource_type="Visit",
-            resource_id=visit.id,
-        )
+    visit = await repository.update_visit_status(db, visit_id, "cancelled")
+    if not visit:
+        raise NotFoundException("Visit not found.", error_code="VISIT_NOT_FOUND")
+    await db.flush()
+    await _write_audit_log(
+        db,
+        user_id=doctor_id,
+        action="CONSULTATION_CANCELLED",
+        resource_type="Visit",
+        resource_id=visit.id,
+    )
     return visit
 
 
@@ -346,7 +363,13 @@ async def update_medication_status(
 # Response mappers
 # ---------------------------------------------------------------------------
 def _visit_response(visit: Visit) -> VisitResponse:
-    patient_id = visit.medical_record.patient_id if visit.medical_record else None
+    state = inspect(visit)
+    patient_id = None
+    # Only access medical_record if already loaded in the instance dict
+    if "medical_record" in state.dict:
+        medical_record = state.dict["medical_record"]
+        if medical_record is not None:
+            patient_id = medical_record.patient_id
     return VisitResponse(
         id=visit.id,
         patient_id=patient_id,

@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Sparkles, AlertTriangle, Activity, Pill } from "lucide-react";
-import { aiApi, patientsApi } from "@/lib/api";
+import { aiApi, doctorApi } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
 import { AIChatPanel } from "@/components/doctor/AIChatPanel";
 
@@ -18,8 +18,8 @@ export default function AIConsultationContent(): React.ReactElement {
   const [sessionId, setSessionId] = useState<string | null>(null);
 
   const { data: patient } = useQuery({
-    queryKey: ["patient", patientId],
-    queryFn: () => patientsApi.getPatient(patientId!),
+    queryKey: ["doctor-patient-overview", patientId],
+    queryFn: () => doctorApi.getDoctorPatientOverview(patientId!),
     enabled: !!patientId,
   });
 
@@ -61,7 +61,7 @@ export default function AIConsultationContent(): React.ReactElement {
             <div className="space-y-3">
               <div>
                 <p className="text-micro text-clinicalGrey uppercase tracking-wider">Name</p>
-                <p className="text-sm font-medium text-mirageBlack">{patient.first_name} {patient.last_name}</p>
+                <p className="text-sm font-medium text-mirageBlack">{patient.full_name}</p>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -91,14 +91,14 @@ export default function AIConsultationContent(): React.ReactElement {
         </div>
 
         {/* Allergies */}
-        {patient?.medical_record?.allergies && patient.medical_record.allergies.length > 0 && (
+        {patient?.allergies && patient.allergies.length > 0 && (
           <div className="bg-alertOrange/5 border border-alertOrange/15 rounded-card p-4">
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="w-4 h-4 text-alertOrange" />
               <h3 className="text-sm font-semibold text-alertOrange">Allergies</h3>
             </div>
             <div className="space-y-1.5">
-              {patient.medical_record.allergies.map((a) => (
+              {patient.allergies.map((a) => (
                 <div key={a.id} className="flex items-center justify-between text-sm">
                   <span className="text-mirageBlack">{a.allergen}</span>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
@@ -113,14 +113,14 @@ export default function AIConsultationContent(): React.ReactElement {
         )}
 
         {/* Conditions */}
-        {patient?.medical_record?.chronic_conditions && patient.medical_record.chronic_conditions.length > 0 && (
+        {patient?.conditions && patient.conditions.length > 0 && (
           <div className="bg-white rounded-card border border-border p-4">
             <div className="flex items-center gap-2 mb-2">
               <Activity className="w-4 h-4 text-celestialBlue" />
               <h3 className="text-sm font-semibold text-mirageBlack">Conditions</h3>
             </div>
             <div className="space-y-1.5">
-              {patient.medical_record.chronic_conditions.map((c) => (
+              {patient.conditions.map((c) => (
                 <div key={c.id} className="flex items-center justify-between text-sm">
                   <span className="text-mirageBlack">{c.condition_name}</span>
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-celestialBlue/10 text-celestialBlue">
@@ -133,14 +133,14 @@ export default function AIConsultationContent(): React.ReactElement {
         )}
 
         {/* Medications */}
-        {patient?.medical_record?.medications && patient.medical_record.medications.length > 0 && (
+        {patient?.current_medications && patient.current_medications.length > 0 && (
           <div className="bg-white rounded-card border border-border p-4">
             <div className="flex items-center gap-2 mb-2">
               <Pill className="w-4 h-4 text-healthGreen" />
               <h3 className="text-sm font-semibold text-mirageBlack">Medications</h3>
             </div>
             <div className="space-y-1.5">
-              {patient.medical_record.medications.map((m) => (
+              {patient.current_medications.map((m) => (
                 <div key={m.id} className="text-sm">
                   <span className="text-mirageBlack font-medium">{m.name}</span>
                   <span className="text-clinicalGrey text-xs"> {m.dosage} · {m.frequency}</span>
@@ -183,6 +183,7 @@ export default function AIConsultationContent(): React.ReactElement {
         ) : (
           <AIChatPanel
             sessionId={sessionId}
+            visitId={visitId || undefined}
             patientId={patientId || undefined}
             initialMessages={session?.messages || []}
           />

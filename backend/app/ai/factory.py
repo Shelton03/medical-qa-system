@@ -3,8 +3,9 @@
 
 from __future__ import annotations
 
-from app.ai.provider import AIProvider
+from app.ai.local_llm_provider import LocalAIProvider
 from app.ai.mock_provider import MockAIProvider
+from app.ai.provider import AIProvider
 from app.core.config import settings
 
 # Singleton cache for provider instances
@@ -44,15 +45,17 @@ def get_ai_provider(provider_name: str | None = None) -> AIProvider:
     Resolve and return a singleton AIProvider instance by name.
 
     Defaults to the provider configured in ``settings.ai_provider``.
-    Supported names: ``mock``, ``openai``, ``anthropic``.
+    Supported names: ``mock``, ``local``, ``openai``, ``anthropic``.
     """
-    name = (provider_name or settings.ai_provider or "mock").lower()
+    name = (provider_name or settings.ai_provider or "local").lower()
 
     if name in _provider_instances:
         return _provider_instances[name]
 
     if name == "mock":
         provider: AIProvider = MockAIProvider()
+    elif name == "local":
+        provider = LocalAIProvider()
     elif name == "openai":
         provider = OpenAIProvider()
     elif name == "anthropic":

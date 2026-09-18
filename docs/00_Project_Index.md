@@ -177,11 +177,11 @@ docs/
 
 09_Deployment_Guide.md
 
-09_Deployment_Guide.md
-
 10_UI_Screen_Specification.md
 
 11_User_Flows_and_State_Machines.md
+
+12_Appointment_Booking_System.md
 ```
 
 Each document has a distinct responsibility.
@@ -237,6 +237,10 @@ UI Screen Specification
 ↓
 
 User Flows and State Machines
+
+↓
+
+Appointment Booking System
 
 This order is intentional.
 
@@ -318,6 +322,15 @@ loading state, empty state and API dependency.
 Defines the lifecycle and transitions for
 authentication, consent, consultation,
 notifications and AI workflows.
+
+---
+
+## 12 — Appointment Booking System
+
+Defines the appointment booking feature including
+patient booking flow, auto-routing algorithm,
+doctor scheduling, admin management, and
+database schema changes.
 
 ---
 

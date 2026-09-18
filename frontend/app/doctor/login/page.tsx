@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
@@ -14,16 +14,18 @@ export default function DoctorLoginPage(): React.ReactElement {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const demoSubmitScheduled = useRef(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("demo") === "1") {
+    if (params.get("demo") === "1" && !demoSubmitScheduled.current) {
+      demoSubmitScheduled.current = true;
       setEmail(DEMO_DOCTOR_EMAIL);
       setPassword(DEMO_DOCTOR_PASSWORD);
       // Auto-submit after a short delay for animation
       const timer = setTimeout(() => {
-        const form = document.querySelector("form");
-        if (form) form.requestSubmit();
+        formRef.current?.requestSubmit();
       }, 1500);
       return () => clearTimeout(timer);
     }
@@ -62,7 +64,7 @@ export default function DoctorLoginPage(): React.ReactElement {
           <p className="text-clinicalGrey mt-1">Sign in to access Mirage</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-mirageBlack mb-1">Email</label>
             <input

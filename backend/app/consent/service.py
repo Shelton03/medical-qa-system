@@ -98,7 +98,6 @@ async def request_consent(
         expiry_hours=expiry_hours,
     )
     consent = await create_consent_request(db, data)
-    doctor_name = await _get_doctor_name(db, consent.doctor_id)
     await _create_audit_log(
         db,
         user_id=doctor_id,
@@ -107,6 +106,9 @@ async def request_consent(
         resource_id=consent.id,
         metadata={"patient_id": str(patient_id), "purpose": purpose},
     )
+    await db.commit()
+    
+    doctor_name = await _get_doctor_name(db, consent.doctor_id)
     await broadcast_consent_notification(db, consent, "CONSENT_REQUESTED")
     await emit_ws_event(
         f"patient:{patient_id}",
@@ -146,7 +148,7 @@ async def approve_consent(
     )
     if updated is None:
         raise NotFoundException("Consent request not found.")
-    doctor_name = await _get_doctor_name(db, updated.doctor_id)
+    
     await _create_audit_log(
         db,
         user_id=patient_id,
@@ -155,6 +157,9 @@ async def approve_consent(
         resource_id=updated.id,
         metadata={"doctor_id": str(updated.doctor_id)},
     )
+    await db.commit()
+    
+    doctor_name = await _get_doctor_name(db, updated.doctor_id)
     await broadcast_consent_notification(db, updated, "CONSENT_APPROVED")
     await emit_ws_event(
         f"doctor:{updated.doctor_id}",
@@ -192,7 +197,7 @@ async def decline_consent(
     updated = await repo_update_status(db, consent_id, "declined")
     if updated is None:
         raise NotFoundException("Consent request not found.")
-    doctor_name = await _get_doctor_name(db, updated.doctor_id)
+    
     await _create_audit_log(
         db,
         user_id=patient_id,
@@ -201,6 +206,9 @@ async def decline_consent(
         resource_id=updated.id,
         metadata={"doctor_id": str(updated.doctor_id)},
     )
+    await db.commit()
+    
+    doctor_name = await _get_doctor_name(db, updated.doctor_id)
     await broadcast_consent_notification(db, updated, "CONSENT_DECLINED")
     await emit_ws_event(
         f"doctor:{updated.doctor_id}",
@@ -232,7 +240,7 @@ async def revoke_consent(
     updated = await repo_revoke(db, consent_id)
     if updated is None:
         raise NotFoundException("Consent request not found.")
-    doctor_name = await _get_doctor_name(db, updated.doctor_id)
+    
     await _create_audit_log(
         db,
         user_id=patient_id,
@@ -241,6 +249,9 @@ async def revoke_consent(
         resource_id=updated.id,
         metadata={"doctor_id": str(updated.doctor_id)},
     )
+    await db.commit()
+    
+    doctor_name = await _get_doctor_name(db, updated.doctor_id)
     await broadcast_consent_notification(db, updated, "CONSENT_REVOKED")
     await emit_ws_event(
         f"doctor:{updated.doctor_id}",

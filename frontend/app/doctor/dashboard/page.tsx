@@ -103,7 +103,7 @@ export default function DoctorDashboardPage(): React.ReactElement {
           className="bg-white rounded-xl border border-border p-5"
         >
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-mirageBlack">Pending Consents</h2>
+            <h2 className="font-semibold text-mirageBlack">Consent Requests Awaiting Review</h2>
             <Link href="/doctor/consents" className="text-xs text-celestialBlue hover:underline">
               View all
             </Link>

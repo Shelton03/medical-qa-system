@@ -2,7 +2,13 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { authApi, clearStoredTokens } from "@/lib/api";
+import {
+  authApi,
+  clearStoredTokens,
+  getStoredAccessToken,
+  getStoredRefreshToken,
+  setStoredTokens,
+} from "@/lib/api";
 import type { UserProfile, UserRole } from "@/lib/types";
 import { AuthContext } from "@/hooks/useAuth";
 
@@ -11,27 +17,6 @@ interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
   role: UserRole | null;
-}
-
-const STORAGE_KEYS = {
-  accessToken: "mirage_access_token",
-  refreshToken: "mirage_refresh_token",
-} as const;
-
-function readStoredTokens(): { access: string | null; refresh: string | null } {
-  if (typeof window === "undefined") return { access: null, refresh: null };
-  return {
-    access: localStorage.getItem(STORAGE_KEYS.accessToken),
-    refresh: localStorage.getItem(STORAGE_KEYS.refreshToken),
-  };
-}
-
-function storeTokens(access: string, refresh: string): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEYS.accessToken, access);
-  localStorage.setItem(STORAGE_KEYS.refreshToken, refresh);
-  const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toUTCString();
-  document.cookie = `access_token=${encodeURIComponent(access)}; path=/; expires=${expires}; SameSite=Lax`;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }): React.ReactElement {
@@ -64,7 +49,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
   }, []);
 
   const checkAuth = useCallback(async () => {
-    const { access, refresh } = readStoredTokens();
+    const access = getStoredAccessToken();
+    const refresh = getStoredRefreshToken();
     if (!access) {
       setState((prev) => ({ ...prev, isLoading: false }));
       return;
@@ -81,7 +67,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       if (refresh) {
         try {
           const refreshed = await authApi.refreshToken(refresh);
-          storeTokens(refreshed.access_token, refresh);
+          const role = state.role ?? "doctor";
+          setStoredTokens(role, refreshed.access_token, refresh);
           await hydrateUser();
           return;
         } catch {
@@ -96,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
         role: null,
       });
     }
-  }, [hydrateUser]);
+  }, [hydrateUser, state.role]);
 
   useEffect(() => {
     checkAuth();
@@ -107,7 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       setState((prev) => ({ ...prev, isLoading: true }));
       try {
         const response = await authApi.loginDoctor(email, password);
-        storeTokens(response.access_token, response.refresh_token);
+        setStoredTokens("doctor", response.access_token, response.refresh_token);
         const profile = await authApi.getMe();
         setState({
           user: profile,
@@ -129,7 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       setState((prev) => ({ ...prev, isLoading: true }));
       try {
         const response = await authApi.loginPatient(national_id, pin);
-        storeTokens(response.access_token, response.refresh_token);
+        setStoredTokens("patient", response.access_token, response.refresh_token);
         const profile = await authApi.getMe();
         setState({
           user: profile,

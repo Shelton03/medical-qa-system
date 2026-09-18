@@ -9,6 +9,7 @@ export interface AuthContextValue {
   isAuthenticated: boolean;
   role: UserRole | null;
   loginDoctor: (email: string, password: string) => Promise<void>;
+  loginAdmin: (email: string, password: string) => Promise<void>;
   loginPatient: (nationalId: string, pin: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -19,6 +20,7 @@ export const AuthContext = React.createContext<AuthContextValue>({
   isAuthenticated: false,
   role: null,
   loginDoctor: async () => {},
+  loginAdmin: async () => {},
   loginPatient: async () => {},
   logout: async () => {},
 });

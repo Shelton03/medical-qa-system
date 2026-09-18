@@ -110,6 +110,62 @@ export interface PatientFullProfileResponse extends PatientResponse {
 }
 
 // ------------------------------------------------------------------
+// Doctor — Patient Overview (consent-protected)
+// ------------------------------------------------------------------
+
+export interface DoctorPatientMedication {
+  id: string;
+  name: string;
+  dosage: string | null;
+  frequency: string | null;
+  instructions: string | null;
+  start_date: string | null;
+}
+
+export interface DoctorPatientVisit {
+  id: string;
+  visit_date: string;
+  status: string;
+  reason: string | null;
+  chief_complaint: string | null;
+  facility_name: string | null;
+  doctor_name: string | null;
+}
+
+export interface DoctorPatientOverview {
+  id: string;
+  medical_record_number: string;
+  full_name: string;
+  national_identifier: string | null;
+  date_of_birth: string | null;
+  gender: string | null;
+  blood_type: string | null;
+  phone: string | null;
+  email: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  allergies: AllergySummary[];
+  conditions: ChronicConditionSummary[];
+  current_medications: DoctorPatientMedication[];
+  recent_visits: DoctorPatientVisit[];
+}
+
+// ------------------------------------------------------------------
+// Timeline
+// ------------------------------------------------------------------
+
+export interface TimelineEvent {
+  event_id: string;
+  event_type: string;
+  date: string;
+  title: string;
+  description: string | null;
+  facility_name: string | null;
+  doctor_name: string | null;
+  status: string | null;
+}
+
+// ------------------------------------------------------------------
 // Consent
 // ------------------------------------------------------------------
 
@@ -258,12 +314,14 @@ export interface MedicationCreatePayload {
 
 export interface AISessionResponse {
   id: string;
-  doctor_id: string;
   patient_id: string | null;
+  doctor_id: string | null;
+  consultation_id: string | null;
   provider_name: string | null;
   status: string;
   started_at: string;
-  ended_at: string | null;
+  completed_at: string | null;
+  conversation_summary: string | null;
 }
 
 export interface AIMessageResponse {
@@ -274,6 +332,24 @@ export interface AIMessageResponse {
   model_name: string | null;
   token_count: number | null;
   created_at: string;
+  message_type?: "question" | "answer";
+  type?: "question" | "answer";
+  confidence_level?: string | null;
+  risk_flags?: string[] | null;
+  explanation?: string | null;
+  disclaimer?: string | null;
+  response_metadata?: Record<string, unknown> | null;
+}
+
+export interface AIMessageStreamChunk {
+  token?: string;
+  done?: boolean;
+  type?: "question" | "answer";
+  message_type?: "question" | "answer";
+  confidence_level?: string;
+  risk_flags?: string[];
+  explanation?: string;
+  disclaimer?: string;
 }
 
 export interface AISessionWithMessagesResponse extends AISessionResponse {
@@ -356,6 +432,135 @@ export interface ClinicalSummary {
 }
 
 // ------------------------------------------------------------------
+// Appointment Booking
+// ------------------------------------------------------------------
+
+export type AppointmentStatus = "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+export type AppointmentPriority = "EMERGENCY" | "URGENT" | "NORMAL" | "LOW";
+
+export interface Facility {
+  id: string;
+  name: string;
+  address: string;
+  phone: string;
+  email: string | null;
+  city: string;
+  country: string;
+  timezone: string;
+}
+
+export interface AdminFacilityItem {
+  id: string;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  city: string | null;
+  country: string | null;
+  timezone: string | null;
+  doctor_count: number;
+}
+
+export interface CreateFacilityPayload {
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  city?: string | null;
+  country?: string | null;
+  timezone?: string | null;
+}
+
+export interface UpdateFacilityPayload {
+  name?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  city?: string | null;
+  country?: string | null;
+  timezone?: string | null;
+}
+
+export interface DoctorSchedule {
+  id: string;
+  doctor_id: string;
+  facility_id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+}
+
+export interface Appointment {
+  id: string;
+  patient_id: string;
+  doctor_id: string | null;
+  facility_id: string;
+  facility_name?: string;
+  doctor_name?: string | null;
+  doctor_specialty?: string | null;
+  appointment_date: string;
+  desired_duration_minutes: number;
+  allocated_start_time: string | null;
+  allocated_end_time: string | null;
+  status: AppointmentStatus;
+  symptoms: string | null;
+  reason: string | null;
+  priority: AppointmentPriority;
+  is_emergency: boolean;
+  triage_score: number;
+  preferred_doctor_id: string | null;
+  created_at: string;
+}
+
+export interface AppointmentCreateRequest {
+  facility_id: string;
+  appointment_date: string;
+  symptoms: string;
+  reason?: string;
+  duration_minutes: number;
+  priority?: AppointmentPriority;
+}
+
+export interface AppointmentResponse {
+  id: string;
+  patient_id: string;
+  facility_id: string;
+  doctor_id: string | null;
+  visit_id: string | null;
+  appointment_date: string;
+  desired_duration_minutes: number;
+  allocated_start_time: string | null;
+  allocated_end_time: string | null;
+  status: AppointmentStatus;
+  reason: string | null;
+  symptoms: string | null;
+  priority: AppointmentPriority;
+  is_emergency: boolean;
+  triage_score: number;
+  preferred_doctor_id: string | null;
+  facility_name?: string;
+  doctor_name?: string | null;
+  doctor_specialty?: string | null;
+  created_at: string;
+}
+
+export interface FacilityResponse {
+  items: Facility[];
+  meta: {
+    total: number;
+    limit: number;
+    offset: number;
+  };
+}
+
+export interface AppointmentListResponse {
+  items: AppointmentResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+// ------------------------------------------------------------------
 // Audit / Access History
 // ------------------------------------------------------------------
 
@@ -368,4 +573,163 @@ export interface AuditLogEntry {
   purpose: string;
   duration_minutes: number;
   outcome: string;
+}
+
+// ------------------------------------------------------------------
+// Schedule
+// ------------------------------------------------------------------
+
+export interface ScheduleAppointment {
+  id: string;
+  patient_id: string | null;
+  patient_name: string | null;
+  start_time: string;
+  end_time: string;
+  appointment_date?: string;
+  duration_minutes: number;
+  status: AppointmentStatus;
+  reason: string | null;
+  visit_id: string | null;
+  facility_name?: string | null;
+}
+
+export interface DoctorScheduleDay {
+  day_of_week: number; // 0 = Sunday ... 6 = Saturday
+  is_working: boolean;
+  start_time: string; // HH:MM
+  end_time: string; // HH:MM
+  max_appointments: number;
+  slot_duration_minutes: number;
+}
+
+export interface DoctorScheduleResponse {
+  doctor_id: string;
+  days: DoctorScheduleDay[];
+}
+
+export interface DoctorScheduleView {
+  id: string;
+  doctor_id: string;
+  working_days: number[];
+  daily_start_time: string;
+  daily_end_time: string;
+  max_daily_appointments: number;
+  default_slot_duration_minutes: number;
+  buffer_minutes: number;
+  time_off_requests: TimeOffResponse[];
+  appointments: ScheduleAppointment[];
+  days?: DoctorScheduleDay[];
+}
+
+export interface TimeOffRequest {
+  start_date: string;
+  end_date: string;
+  type: "LEAVE" | "SICK" | "TRAINING" | "OTHER";
+  reason: string;
+}
+
+export interface TimeOffResponse extends TimeOffRequest {
+  id: string;
+  doctor_id: string;
+  status: "PENDING" | "APPROVED" | "DENIED";
+  requested_at: string;
+}
+
+// ------------------------------------------------------------------
+// Admin
+// ------------------------------------------------------------------
+
+export interface AdminActivityEvent {
+  id: string;
+  event_type: string;
+  description: string;
+  timestamp: string;
+  actor_name: string | null;
+}
+
+export interface AdminDashboardStats {
+  total_appointments_today: number;
+  pending_confirmations: number;
+  doctors_on_leave: number;
+  facility_occupancy_rate: number;
+  recent_activity: AdminActivityEvent[];
+}
+
+export interface AdminDoctorListItem {
+  id: string;
+  first_name: string;
+  last_name: string;
+  specialty: string;
+  facility_name: string;
+  working_days: string[];
+  schedule_start_time: string;
+  schedule_end_time: string;
+}
+
+export interface ScheduleUpdateRequest {
+  days: DoctorScheduleDay[];
+}
+
+export interface TimeOffAdminRequest {
+  start_date: string; // YYYY-MM-DD
+  end_date: string; // YYYY-MM-DD
+  type: "LEAVE" | "SICK" | "TRAINING" | "OTHER";
+  reason: string;
+}
+
+export interface SystemConfigItem {
+  key: string;
+  value: string;
+  description?: string;
+  updated_at?: string;
+}
+
+export interface UpdateSystemConfigPayload {
+  value: string;
+}
+
+export interface TimeOffEntry {
+  id: string;
+  doctor_id: string;
+  doctor_name: string;
+  start_date: string;
+  end_date: string;
+  type: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  requested_at: string;
+}
+
+export interface AppointmentAdminItem {
+  id: string;
+  date_time: string;
+  patient_id: string;
+  patient_name: string;
+  doctor_id: string;
+  doctor_name: string;
+  facility_id: string;
+  facility_name: string;
+  status: string;
+  priority: string;
+  reason: string | null;
+}
+
+export interface PaginatedAdminAppointments {
+  items: AppointmentAdminItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface AppointmentAdminFilters {
+  date_from?: string;
+  date_to?: string;
+  facility_id?: string;
+  status?: string;
+  priority?: string;
+  doctor_search?: string;
+  patient_search?: string;
+  page?: number;
+  page_size?: number;
 }

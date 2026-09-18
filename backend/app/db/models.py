@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import List
 
@@ -12,12 +12,14 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
     Numeric,
     String,
     Text,
+    Time,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -142,6 +144,9 @@ class Patient(Base):
     ai_sessions: Mapped[List["AISession"]] = relationship(
         "AISession", back_populates="patient"
     )
+    appointments: Mapped[List["Appointment"]] = relationship(
+        "Appointment", back_populates="patient"
+    )
 
     __table_args__ = (
         Index("ix_patients_medical_record_number", medical_record_number, unique=True),
@@ -178,6 +183,9 @@ class Doctor(Base):
     department: Mapped[str | None] = mapped_column(String(255), nullable=True)
     license_expiry: Mapped[datetime | None] = mapped_column(Date(), nullable=True)
     years_experience: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_daily_appointments: Mapped[int | None] = mapped_column(Integer, default=20)
+    is_accepting_appointments: Mapped[bool] = mapped_column(Boolean, default=True)
+    next_available_date: Mapped[datetime | None] = mapped_column(Date(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -199,6 +207,12 @@ class Doctor(Base):
     ai_sessions: Mapped[List["AISession"]] = relationship(
         "AISession", back_populates="doctor"
     )
+    # Appointment-related relationships
+    appointments: Mapped[List["Appointment"]] = relationship(
+        "Appointment", foreign_keys="Appointment.doctor_id", back_populates="doctor"
+    )
+    schedules: Mapped[List["DoctorSchedule"]] = relationship("DoctorSchedule", back_populates="doctor")
+    time_offs: Mapped[List["DoctorTimeOff"]] = relationship("DoctorTimeOff", back_populates="doctor")
 
     __table_args__ = (
         Index("ix_doctors_registration_number", registration_number, unique=True),
@@ -241,10 +255,32 @@ class Facility(Base):
 
     doctors: Mapped[List["Doctor"]] = relationship("Doctor", back_populates="facility")
     visits: Mapped[List["Visit"]] = relationship("Visit", back_populates="facility")
+    appointments: Mapped[List["Appointment"]] = relationship("Appointment", back_populates="facility")
 
     __table_args__ = (
         Index("ix_facilities_name", name),
         Index("ix_facilities_city", city),
+    )
+
+
+class SystemConfig(Base):
+    """Hospital-wide configuration settings editable by admin."""
+
+    __tablename__ = "system_configs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_system_configs_key", key),
     )
 
 
@@ -333,6 +369,7 @@ class Visit(Base):
     chief_complaint: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
     follow_up_required: Mapped[bool | None] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -369,6 +406,7 @@ class Visit(Base):
     ai_sessions: Mapped[List["AISession"]] = relationship(
         "AISession", back_populates="visit"
     )
+    appointment: Mapped["Appointment"] = relationship("Appointment", back_populates="visit", uselist=False)
 
     __table_args__ = (
         Index("ix_visits_visit_date", visit_date),
@@ -742,9 +780,25 @@ class AISession(Base):
     provider_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     conversation_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Assessment pipeline state (ported from original symptom checker)
+    assessment_done: Mapped[bool] = mapped_column(Boolean, default=False)
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    gaps_remaining: Mapped[int] = mapped_column(Integer, default=0)
+    candidate_domains: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    key_symptoms: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    missing_info: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    risk_flags: Mapped[list[str]] = mapped_column(JSONB, default=list)
+
+    # Link to appointment for pre-consultation symptom checkers
+    appointment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("appointments.id", onupdate="CASCADE", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     patient: Mapped["Patient"] = relationship("Patient", back_populates="ai_sessions")
     doctor: Mapped["Doctor"] = relationship("Doctor", back_populates="ai_sessions")
     visit: Mapped["Visit"] = relationship("Visit", back_populates="ai_sessions")
+    appointment: Mapped["Appointment"] = relationship("Appointment", back_populates="ai_sessions")
     messages: Mapped[List["AIMessage"]] = relationship(
         "AIMessage", back_populates="session"
     )
@@ -776,6 +830,8 @@ class AIMessage(Base):
     )
     role: Mapped[str] = mapped_column(String(50), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    message_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    response_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -996,4 +1052,163 @@ class MedicalRecordVersion(Base):
     __table_args__ = (
         Index("ix_medical_record_versions_medical_record_id", medical_record_id),
         Index("ix_medical_record_versions_version_number", version_number),
+    )
+
+
+# ---------------------------------------------------------------------------
+# appointments
+# ---------------------------------------------------------------------------
+class Appointment(Base):
+    """Patient appointment booking with auto-routed doctor assignment."""
+
+    __tablename__ = "appointments"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("patients.id", onupdate="CASCADE", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    facility_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("facilities.id", onupdate="CASCADE", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    doctor_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("doctors.id", onupdate="CASCADE", ondelete="SET NULL"),
+        nullable=True,
+    )
+    visit_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("visits.id", onupdate="CASCADE", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    appointment_date: Mapped[date] = mapped_column(Date(), nullable=False)
+    desired_duration_minutes: Mapped[int] = mapped_column(Integer, default=30)
+    allocated_start_time: Mapped[time | None] = mapped_column(Time(), nullable=True)
+    allocated_end_time: Mapped[time | None] = mapped_column(Time(), nullable=True)
+
+    status: Mapped[str] = mapped_column(String(20), default="PENDING")
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    symptoms: Mapped[str | None] = mapped_column(Text, nullable=True)
+    priority: Mapped[str] = mapped_column(String(20), default="NORMAL")
+    is_emergency: Mapped[bool] = mapped_column(Boolean, default=False)
+    triage_score: Mapped[int] = mapped_column(Integer, default=0)
+
+    preferred_doctor_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("doctors.id", onupdate="CASCADE", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    patient_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    doctor_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_by: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    cancellation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    patient: Mapped["Patient"] = relationship("Patient", back_populates="appointments")
+    facility: Mapped["Facility"] = relationship("Facility", back_populates="appointments")
+    doctor: Mapped["Doctor"] = relationship("Doctor", foreign_keys=[doctor_id], back_populates="appointments")
+    visit: Mapped["Visit"] = relationship("Visit", back_populates="appointment")
+    preferred_doctor: Mapped["Doctor"] = relationship("Doctor", foreign_keys=[preferred_doctor_id])
+    slot_allocation: Mapped["AppointmentSlotAllocation"] = relationship(
+        "AppointmentSlotAllocation", back_populates="appointment", uselist=False
+    )
+    ai_sessions: Mapped[List["AISession"]] = relationship("AISession", back_populates="appointment")
+
+    __table_args__ = (
+        Index("ix_appointments_patient_id", patient_id),
+        Index("ix_appointments_facility_id", facility_id),
+        Index("ix_appointments_doctor_id", doctor_id),
+        Index("ix_appointments_date", appointment_date),
+        Index("ix_appointments_status", status),
+        Index("ix_appointments_priority", priority),
+    )
+
+
+class DoctorSchedule(Base):
+    """Weekly schedule template for a doctor. Admin-managed."""
+
+    __tablename__ = "doctor_schedules"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    doctor_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("doctors.id", onupdate="CASCADE", ondelete="CASCADE"),
+        nullable=False,
+    )
+    day_of_week: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_time: Mapped[time] = mapped_column(Time(), nullable=False)
+    end_time: Mapped[time] = mapped_column(Time(), nullable=False)
+    is_working_day: Mapped[bool] = mapped_column(Boolean, default=True)
+    default_slot_duration: Mapped[int] = mapped_column(Integer, default=30)
+    max_daily_appointments: Mapped[int] = mapped_column(Integer, default=20)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    doctor: Mapped["Doctor"] = relationship("Doctor", back_populates="schedules")
+
+    __table_args__ = (
+        Index("ix_doctor_schedules_doctor_id", doctor_id),
+    )
+
+
+class DoctorTimeOff(Base):
+    """Leave / unavailability records for doctors."""
+
+    __tablename__ = "doctor_time_offs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    doctor_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("doctors.id", onupdate="CASCADE", ondelete="CASCADE"),
+        nullable=False,
+    )
+    start_date: Mapped[date] = mapped_column(Date(), nullable=False)
+    end_date: Mapped[date] = mapped_column(Date(), nullable=False)
+    type: Mapped[str] = mapped_column(String(20), default="LEAVE")
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="APPROVED")
+    requested_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    doctor: Mapped["Doctor"] = relationship("Doctor", back_populates="time_offs")
+
+    __table_args__ = (
+        Index("ix_doctor_time_offs_doctor_id", doctor_id),
+        Index("ix_doctor_time_offs_dates", start_date, end_date),
+    )
+
+
+class AppointmentSlotAllocation(Base):
+    """Specific time slot allocated for an appointment."""
+
+    __tablename__ = "appointment_slot_allocations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    appointment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("appointments.id", onupdate="CASCADE", ondelete="CASCADE"),
+        nullable=False,
+    )
+    doctor_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("doctors.id", onupdate="CASCADE", ondelete="CASCADE"),
+        nullable=False,
+    )
+    slot_date: Mapped[date] = mapped_column(Date(), nullable=False)
+    start_time: Mapped[time] = mapped_column(Time(), nullable=False)
+    end_time: Mapped[time] = mapped_column(Time(), nullable=False)
+    buffer_after_minutes: Mapped[int] = mapped_column(Integer, default=3)
+    status: Mapped[str] = mapped_column(String(20), default="ALLOCATED")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    appointment: Mapped["Appointment"] = relationship("Appointment", back_populates="slot_allocation")
+
+    __table_args__ = (
+        Index("ix_slot_allocations_doctor_date", doctor_id, slot_date),
+        Index("ix_slot_allocations_appointment", appointment_id),
     )

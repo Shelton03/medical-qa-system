@@ -10,11 +10,13 @@ import {
   Settings,
   Shield,
   Sparkles,
+  Calendar,
 } from 'lucide-react';
 
 const navItems = [
   { label: 'Dashboard', href: '/doctor/dashboard', icon: LayoutDashboard },
   { label: 'Patients', href: '/doctor/patients', icon: Users },
+  { label: 'Schedule', href: '/doctor/schedule', icon: Calendar },
   { label: 'Consents', href: '/doctor/consents', icon: FileCheck },
   { label: 'Consultations', href: '/doctor/consultations', icon: Stethoscope },
   { label: 'AI Consultation', href: '/doctor/ai-consultation', icon: Sparkles },

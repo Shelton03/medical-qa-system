@@ -13,7 +13,7 @@ from fastapi.exceptions import RequestValidationError
 
 from app.core.config import settings
 from app.core.database import init_db
-from app.db.seeder import seed_demo_data
+from app.db.seeder import seed_demo_data, seed_appointments
 from app.auth import router as auth_router
 from app.consent import router as consent_router
 from app.ai import router as ai_router
@@ -23,10 +23,13 @@ from app.doctor import router as doctor_router
 from app.records import router as records_router
 from app.timeline import router as timeline_router
 from app.transcription import router as transcription_router
+from app.transcription.ws import router as transcription_ws_router
 from app.audit import router as audit_router
 from app.notifications.router import router as notifications_router
 from app.notifications.websocket_router import router as notifications_ws_router
 from app.websocket.router import router as ws_router
+from app.appointment import router as appointment_router
+from app.admin.router import router as admin_router
 from app.middleware.correlation_id import CorrelationIdMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.audit_log import AuditLogMiddleware
@@ -53,6 +56,7 @@ async def lifespan(app: FastAPI):
 
         async with AsyncSessionLocal() as db:
             await seed_demo_data(db)
+            await seed_appointments(db)
 
     from app.websocket.redis_listener import listen_for_websocket_events
     from app.notifications.redis_listener import listen_for_notifications
@@ -82,9 +86,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -104,12 +112,19 @@ app.include_router(timeline_router, prefix="/api/v1/timeline", tags=["Timeline"]
 app.include_router(transcription_router, prefix="/api/v1/transcription", tags=["Transcription"])
 app.include_router(audit_router, prefix="/api/v1/audit", tags=["Audit"])
 app.include_router(
+    appointment_router,
+    prefix="/api/v1/appointments",
+    tags=["Appointments"],
+)
+app.include_router(
     notifications_router,
     prefix="/api/v1/notifications",
     tags=["Notifications"],
 )
 app.include_router(notifications_ws_router)
+app.include_router(transcription_ws_router)
 app.include_router(ws_router)
+app.include_router(admin_router)
 
 
 def _build_error_response(status_code: int, error_code: str, message: str) -> JSONResponse:
@@ -174,9 +189,3 @@ async def request_validation_handler(
     ]
     envelope = Envelope.fail(*errors)
     return JSONResponse(status_code=422, content=envelope.model_dump())
-
-
-@app.get("/health", tags=["Health"])
-async def health_check() -> dict[str, str]:
-    """Service health check."""
-    return {"status": "ok", "service": "mirage-backend"}

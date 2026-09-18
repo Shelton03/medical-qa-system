@@ -18,6 +18,12 @@ DEMO_CREDENTIALS = {
             "pin": "2024",
         }
     ],
+    "admin": [
+        {
+            "email": "admin@mirage.health",
+            "password": "Admin2024!",
+        }
+    ],
 }
 
 _DEMO_DOCTOR_UUID = uuid.uuid5(uuid.NAMESPACE_OID, "demo-doctor-dr.sarah.mirage@mirage.health")
@@ -45,6 +51,16 @@ def authenticate_demo_patient(national_id: str, pin: str) -> bool:
     return False
 
 
+def authenticate_demo_admin(email: str, password: str) -> bool:
+    """Check whether provided credentials match demo admin credentials."""
+    if not settings.demo_mode_enabled:
+        return False
+    for cred in DEMO_CREDENTIALS["admin"]:
+        if cred["email"] == email and cred["password"] == password:
+            return True
+    return False
+
+
 def generate_demo_tokens(role: str) -> tuple[str, str, uuid.UUID]:
     """Return (access_token, refresh_token, synthetic_uuid) for a demo role."""
     if role == "doctor":
@@ -57,7 +73,7 @@ def generate_demo_tokens(role: str) -> tuple[str, str, uuid.UUID]:
         raise ValueError("Unsupported demo role")
 
     access = create_access_token(synthetic_uuid, role=role)
-    refresh = create_refresh_token(synthetic_uuid)
+    refresh = create_refresh_token(synthetic_uuid, role=role)
     return access, refresh, synthetic_uuid
 
 

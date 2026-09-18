@@ -28,6 +28,7 @@ from app.db.models import (
     Patient,
     User,
     Visit,
+    AISession,
 )
 from app.doctor.schemas import (
     ClinicalNoteResponse,
@@ -372,6 +373,27 @@ async def get_timeline(
                 facility_name=None,
                 doctor_name=None,
                 status=c.status,
+            )
+        )
+
+    # AI Sessions
+    ai_result = await db.execute(
+        select(AISession)
+        .where(AISession.patient_id == patient_id)
+        .order_by(AISession.started_at.desc())
+    )
+    for ai_session in ai_result.scalars().all():
+        initiated_by = ai_session.provider_metadata.get("initiated_by") if ai_session.provider_metadata else None
+        events.append(
+            TimelineEvent(
+                event_id=ai_session.id,
+                event_type="AI_SESSION",
+                date=ai_session.started_at,
+                title=f"AI Symptom Check ({initiated_by or 'self-initiated'})",
+                description=ai_session.conversation_summary or "AI-assisted symptom assessment",
+                facility_name=None,
+                doctor_name=None,
+                status=ai_session.status,
             )
         )
 

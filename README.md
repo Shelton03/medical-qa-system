@@ -22,7 +22,7 @@ Mirage follows a clean five-layer architecture:
                   ▼
 ┌──────────────────────────────────────┐
 │         FastAPI Backend (Python)     │
-│  Auth │ API │ Services │ AI Layer    │
+│  Auth │ API │ Services │ AI Layer (Local Gemma 3 4B)  │
 └──────────────────────────────────────┘
                   │
      ┌────────────┴────────────┐
@@ -34,7 +34,8 @@ Mirage follows a clean five-layer architecture:
 - **Patient Application** — Mobile-first web app rendered inside a realistic `PhoneFrame` simulator.
 - **Doctor Portal** — Desktop-first clinical dashboard with responsive layouts.
 - **Split-screen Demo Mode** — Side-by-side patient and doctor views for live demonstrations.
-- **AI Provider Abstractions** — Symptom checking, summarization, transcription, and diagnosis are vendor-agnostic.
+- **AI Clinical Assessment Pipeline** — 5-service architecture (InputProcessor, AssessmentService, DecisionEngine with 3-run self-consistency, QuestionGenerator, AnswerGenerator) powered by local Gemma 3 4B via llama-cpp. Replaces mock provider. Symptom checking with structured triage and risk-flag detection.
+- **Consent-Gated Clinical Data Access** — Doctor AI context is enriched with `PatientClinicalProfile` (allergies, conditions, medications, visits) only after patient consent is approved via `ConsentRequest` record.
 
 ---
 
@@ -67,6 +68,29 @@ The application will be available at:
 - **Frontend** → http://localhost:3000
 - **Backend API** → http://localhost:8001
 - **API Docs** → http://localhost:8001/docs
+
+---
+
+## AI Assessment Pipeline
+
+Mirage v1.1.0 replaces the mock AI provider with a real local LLM-powered clinical assessment pipeline.
+
+### Architecture
+
+The pipeline runs through 5 services in sequence:
+
+1. **InputProcessor** — Extracts structured symptoms, duration, severity from free-text patient messages.
+2. **AssessmentService** — Runs initial triage via LLM prompt, populates `candidate_domains`, `key_symptoms`, `missing_info`, `risk_flags`.
+3. **DecisionEngine** — 3-run self-consistency loop (majority vote) decides "ASK" or "ANSWER". Override: confidence < 0.7 = ASK, gaps_remaining > 0 = ASK.
+4. **QuestionGenerator** — Generates one follow-up question targeting gaps or risk flags.
+5. **AnswerGenerator** — Produces preliminary assessment with content, explanation, disclaimer, and confidence level.
+
+### Constraints
+
+- **Local Gemma 3 4B** (`gemma-3-4b-it-Q4_K_M.gguf`, 2.8GB) loaded via `llama-cpp`
+- **Inference is CPU-only** — serialized via `asyncio.Semaphore(1)`, ~1-2s per call
+- **Self-consistency adds ~3-6s** on first assessment (3 sequential runs)
+- **Medical disclaimer required** on all generated answers
 
 ---
 

@@ -90,6 +90,21 @@ async def demo_login(
 
 
 @router.post(
+    "/admin/login",
+    response_model=Envelope[TokenPair],
+    summary="Admin login",
+    description="Authenticate an admin by email and password, with demo fallback.",
+)
+async def admin_login(
+    body: DoctorLoginRequest,
+    db: AsyncSession = Depends(get_db),
+) -> Envelope[TokenPair]:
+    from app.auth.service import login_admin
+    token_pair = await login_admin(body.email, body.password, db)
+    return Envelope.ok(token_pair)
+
+
+@router.post(
     "/doctor/login",
     response_model=Envelope[TokenPair],
     summary="Doctor login",

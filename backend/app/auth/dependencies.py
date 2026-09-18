@@ -79,8 +79,8 @@ def require_role(*roles: str) -> Callable:
     return _role_checker
 
 
-get_current_doctor = require_role("doctor", "admin")
-get_current_patient = require_role("patient", "admin")
+get_current_doctor = require_role("doctor")
+get_current_patient = require_role("patient")
 
 
 async def get_current_active_user(
