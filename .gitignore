@@ -1,9 +1,30 @@
+# Environment & secrets
 .env
-.venv/
+.env.local
+.env.production
+
+# Python
 __pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Logs
 *.log
-.next/
 backend.log
+frontend.log
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+
+# OS files
+.DS_Store
+
+# Project artifacts
 alembic_archives/
 
 # AI session logs and stray files

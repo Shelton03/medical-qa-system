@@ -8,7 +8,7 @@ A plain-language guide to what this repository is, what it's trying to achieve, 
 
 1. **The Medical QA System** (`app/` at repo root) — the repo's namesake. A standalone AI symptom-triage chatbot: a FastAPI service that runs an interactive medical question-answering session, deciding at each turn whether to **ASK** more clarifying questions or **ANSWER** with advice, using LLM self-consistency voting with a safety bias. This is the original project.
 
-2. **Mirage** (`backend/` + `frontend/` + `docs/`) — the larger, newer system and the bulk of the code. A full healthcare platform built for a **Healthathon** demonstration: patient-controlled medical records with consent-based doctor access, AI-assisted clinical workflows, and real-time updates. Its design explicitly treats the Medical QA System as the "Existing Symptom Checker" to be plugged in behind a provider interface (docs/01 PRD, FR-9).
+2. **Mirage** (`backend/` + `frontend/` + `docs/`) — the larger, newer system and the bulk of the code. A full healthcare platform built for a **Healthathon** demonstration: patient-controlled medical records with consent-based doctor access, appointment booking, an admin console, AI-assisted clinical workflows, and real-time updates. Its design explicitly treats the Medical QA System as the "Existing Symptom Checker" to be plugged in behind a provider interface (docs/01 PRD, FR-9).
 
 The repo lives at `github.com/Shelton03/medical-qa-system`, forked from `github.com/NyashaEysenck/medical-qa-system` (added as `upstream`).
 
@@ -19,6 +19,7 @@ Per `docs/01_Product_Requirements_Document.md`: healthcare information in Zimbab
 - **Patients own their records**, not hospitals. Records follow the patient across facilities.
 - **Consent first**: a doctor must request access; the patient approves or denies on their phone; access is temporary and expires. No consent, no records.
 - **AI assists, never decides**: AI drafts differential diagnoses, SOAP-style clinical summaries, and symptom assessments — but nothing enters the permanent record without clinician review and approval.
+- **Bookable, not just walk-in**: patients book appointments against real doctor schedules; confirmed appointments open an AI pre-assessment that feeds the consultation.
 - **Transparency**: every view, edit, consent, and access is audit-logged; patients can see who viewed their records.
 - **One 5-minute demo path** (the success metric): doctor logs in → searches patient → requests access → patient approves in real time → doctor reviews history → AI assists consultation → doctor confirms diagnosis and note → record updates → patient sees it instantly.
 
@@ -31,17 +32,21 @@ backend/app/providers/interfaces/       <- abstract contracts (SymptomCheckerPro
                                            DiagnosisProvider, ClinicalSummaryProvider,
                                            TranscriptionProvider, NotificationProvider,
                                            StorageProvider, EmailProvider)
-backend/app/providers/implementations/  <- mock_* implementations selected via env vars
-backend/app/providers/factory.py        <- resolves provider by env (AI_PROVIDER, SYMPTOM_PROVIDER...)
+backend/app/providers/implementations/  <- mock_*, gateway_*, local_* implementations
+backend/app/providers/factory.py        <- resolves provider by env (SYMPTOM_PROVIDER,
+                                           SUMMARY_PROVIDER, TRANSCRIPTION_PROVIDER)
+backend/app/ai/factory.py               <- resolves the chat AIProvider by AI_PROVIDER
 ```
 
-`backend/app/ai/provider.py` defines `AIProvider` (abstract) with `AIContext`/`AIMessage`, and `backend/app/ai/chat_engine.py` orchestrates AI sessions with consent-gated patient context. The default `MockAIProvider` (`backend/app/ai/mock_provider.py`) returns canned context-aware responses with the mandatory clinical disclaimer ("Final diagnoses... must be confirmed by the attending physician"). Swapping in the real Medical QA System — or any LLM vendor — means implementing these interfaces; business logic never imports a vendor SDK.
+Every model slot resolves the same three ways: `mock` (canned demo data), `gateway`/`ccaimex` (real models through the ccaimex OpenAI-compatible gateway configured via `LLM_GATEWAY_URL` + `LLM_GATEWAY_API_KEY`/`LLM_API_KEY`), or `local` (a locally hosted LLM). `backend/app/ai/gateway_provider.py` (`GatewayAIProvider`) handles chat, streaming, and record analysis; `gateway_providers.py` reuses it for diagnosis, summary, and transcription. Business logic only ever sees the abstract interfaces — swapping a vendor never touches routers or services.
+
+Patient-facing AI output is cleaned server-side before it reaches the UI: generated questions and JSON payloads pass through strippers (`QuestionGenerator._clean_question`, `app/ai/local_llm.clean_json_response`) that remove reasoning traces and formatting artifacts, so model internals never leak to patients.
 
 The root `app/` QA system is not yet wired in as a provider implementation — it sits alongside Mirage as a standalone service with its own `/api/query` endpoint. Building that adapter (implementing `SymptomCheckerProvider`/`AIProvider`) is the integration step the architecture anticipates.
 
 ## The Medical QA System (`app/`)
 
-FastAPI + MongoDB (Motor async) + a parallel PostgreSQL engine, entry `app/main.py`, mounted at `/api` with sub-routers for auth/sessions/contact/chat plus the main `POST /api/query`. Pipeline in `app/services/orchestrator.py`:
+FastAPI + PostgreSQL (SQLAlchemy 2 async) + MinIO for uploaded files, entry `app/main.py`, mounted at `/api` with sub-routers for auth/sessions/contact plus the main `POST /api/query`. Sessions, messages, and contact requests persist to PostgreSQL (`app/db/repositories.py`); uploaded files go to a MinIO bucket (`app/db/storage.py`) with only metadata in an `attachments` table. Pipeline in `app/services/orchestrator.py`:
 
 - `InputProcessor` — extracts entities/symptoms/severity via LLM (stand-in for MedSpaCy/BioBERT)
 - `AssessmentService`, `GapAnalysisService` — track missing info and risk flags per session
@@ -49,11 +54,11 @@ FastAPI + MongoDB (Motor async) + a parallel PostgreSQL engine, entry `app/main.
 - `QuestionGenerator` / `AnswerGenerator` — produce the next question or the advice
 - `ConversationSummarizer` — wraps up the session, with escalation to a doctor after >15 user turns
 
-Sessions persist to MongoDB via motor repositories; it needs `MONGODB_URI` and `LLM_BASE_URL/API_KEY/MODEL` env vars. It is a separate FastAPI app from Mirage's backend — do not confuse the two `app/` packages; only `backend/app/` is the Mirage backend.
+It needs `POSTGRES_URL`/`POSTGRES_PASSWORD`, MinIO `S3_*`, and `LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL` env vars. It is a separate FastAPI app from Mirage's backend — do not confuse the two `app/` packages; only `backend/app/` is the Mirage backend.
 
 ## Mirage backend (`backend/`)
 
-FastAPI, Python 3.12, SQLAlchemy 2 async + asyncpg, Alembic, Redis pub/sub, JWT auth. Entry: `backend/main.py`, which wires the routers, three middlewares, and startup tasks.
+FastAPI, Python 3.12, SQLAlchemy 2 async + asyncpg, Alembic, Redis pub/sub, JWT auth. Entry: `backend/main.py`, which wires the routers, CORS plus correlation-ID / rate-limit / audit-log middlewares, and startup tasks.
 
 **Routers** (all under `/api/v1` per the API contract):
 
@@ -66,51 +71,57 @@ FastAPI, Python 3.12, SQLAlchemy 2 async + asyncpg, Alembic, Redis pub/sub, JWT 
 | `records/` | consent-gated medical record get/patch + version history |
 | `timeline/` | chronological health timeline + per-event detail |
 | `ai/` | AI sessions, messages, streaming responses (SSE), diagnosis + summary generation |
+| `appointment/` | booking, my-appointments, doctor schedule, facilities lookup, admin dashboard/doctors/schedules/time-off, confirm/cancel, start-consultation |
+| `admin/` | admin console API: facilities CRUD + system settings (`system_configs`) |
 | `notifications/` | notification list/unread-count/mark-read + `/ws/notifications` WebSocket |
 | `transcription/` | consultation transcription (provider-abstracted) |
 | `audit/` | immutable audit log queries |
 | `websocket/` | generic `/ws` endpoint, event types, Redis listener/publisher |
 
-**Real-time flow**: domain events (`WSEventType` — CONSENT_REQUESTED/APPROVED/DECLINED/REVOKED, RECORD_UPDATED, AI_RESPONSE_READY, TIMELINE_UPDATED, etc.) are published to Redis (`mirage:ws:{channel}` via `websocket/publisher.py`); background listeners started in `main.py`'s lifespan subscribe to the Redis patterns and push to connected WebSocket clients per-user (`notifications:user:{id}`) or broadcast (`notifications:all`). This is what makes the patient's phone update the moment the doctor acts, and vice versa.
+**Real-time flow**: domain events (`WSEventType` — CONSENT_REQUESTED/APPROVED/DECLINED/REVOKED, RECORD_UPDATED, AI_RESPONSE_READY, TIMELINE_UPDATED, APPOINTMENT_CREATED/CONFIRMED/CANCELLED/REMINDER, EMERGENCY_APPOINTMENT, CONSULTATION_READY, etc.) are published to Redis (`mirage:ws:{channel}` via `websocket/publisher.py`); background listeners started in `main.py`'s lifespan subscribe to the Redis patterns and push to connected WebSocket clients per-user (`notifications:user:{id}`) or broadcast (`notifications:all`). This is what makes the patient's phone update the moment the doctor acts, and vice versa.
 
-**Auth**: JWT (access 60 min / refresh 30 days), role-gated dependencies (`require_role` factory). Demo mode (`DEMO_MODE=true`) enables one-click login for patient/doctor/admin using deterministic synthetic accounts.
+**Auth**: JWT (access 60 min / refresh 30 days), role-gated dependencies (`require_role` factory), role-aware token keys (`mirage_patient_access_token`, `mirage_doctor_access_token`, ...) kept in sync between `localStorage` and HTTP cookies so Next.js middleware can gate routes. Demo mode (`DEMO_MODE=true`) enables one-click login for patient/doctor/admin using deterministic synthetic accounts.
 
-**Data model** — 21 SQLAlchemy tables in `backend/app/db/models.py` (UUID PKs, UTC): users, patients, doctors, facilities, medical_records (+ medical_record_versions — corrections create new versions, nothing is deleted), visits, diagnoses, medications, allergies, chronic_conditions, laboratory_results, imaging_results, clinical_documents, clinical_notes, consent_requests, ai_sessions, ai_messages, notifications, refresh_tokens, audit_logs. This models the core idea: the record belongs to the patient, consent links patient and doctor, and every change leaves history.
+**Data model** — 26 SQLAlchemy tables in `backend/app/db/models.py` (UUID PKs, UTC): users, patients, doctors, facilities, system_configs, medical_records (+ medical_record_versions — corrections create new versions, nothing is deleted), visits, diagnoses, medications, allergies, chronic_conditions, laboratory_results, imaging_results, clinical_documents, clinical_notes, consent_requests, appointments (+ doctor_schedules, doctor_time_offs, appointment_slot_allocations), ai_sessions, ai_messages, notifications, refresh_tokens, audit_logs. This models the core idea: the record belongs to the patient, consent links patient and doctor, appointments live on real doctor schedules, and every change leaves history.
 
-**Demo seeding**: `backend/app/db/seeder.py` populates a full demo world on startup when `DEMO_MODE=true` — a demo doctor, a demo patient, and their conditions, allergies, medications and visits — so the whole workflow can be demonstrated without real data.
+**Appointment booking**: `backend/app/appointment/` (router/service/schemas/enums) — patients book with `desired_duration_minutes` and `is_emergency` against seeded doctor schedules; doctors confirm, cancel, or start the consultation; slots are allocated from `doctor_schedules`/`appointment_slot_allocations`. Booking requires schedule rows, so weekday schedules are seeded idempotently by Alembic migration when empty. Each appointment carries an AI pre-assessment that is available to the doctor at consultation time.
 
-**Tests**: 15 test files in `backend/tests/` (auth, consent, patients, records, ai, audit, middleware, migrations, providers, seeder, websocket, db connection) — run with `make test`.
+**Demo seeding**: `backend/app/db/seeder.py` populates a full demo world on startup when `DEMO_MODE=true` — a demo doctor, a demo patient, their conditions, allergies, medications, and roughly 50 realistic visits with timeline events — so dashboards and the whole workflow can be demonstrated without real or zeroed-out data.
+
+**Tests**: 13 test modules in `backend/tests/` (auth, consent, patients, doctor, records, ai, audit, middleware, migrations, providers, seeder, websocket, db connection) — run with `make test`.
 
 ## Mirage frontend (`frontend/`)
 
-Next.js 14 App Router + TypeScript + Tailwind + Framer Motion + React Query, with two apps in one codebase:
+Next.js 14 App Router + TypeScript + Tailwind + Framer Motion + React Query, with three apps plus demo mode in one codebase:
 
-- **`/patient/*`** — mobile-first patient app: home dashboard, records, AI symptom check (chat-style), consent approvals, notifications, health timeline, medical ID, profile. Login with national ID + PIN.
-- **`/doctor/*`** — desktop clinical portal: dashboard, patient search, consent management, consultations with `AIChatPanel` (streaming AI responses), `SOAPEditor` (editable AI-drafted summary sections: Chief Complaint / HPI / Findings / Assessment / Plan), `DifferentialList`, `PrescriptionCard`, access history, audit views.
-- **`/demo`** — split-screen demo mode: doctor portal in a sandboxed `<iframe>` on the left, the patient app in a second iframe **wrapped in a realistic `PhoneFrame`** (CSS-simulated smartphone) on the right, with a scripted 10-step Healthathon walkthrough (intro → logins → patient search → consent request → approve → AI consultation → record update) with keyboard shortcuts, per-step auto-advance timers, and a collapsible narration panel. This exists so the full patient-doctor story can be shown on one screen, no second device needed.
+- **`/patient/*`** — mobile-first patient app: home dashboard, records, AI symptom check (chat-style), appointment booking (`book-appointment`) and appointment list, consent approvals, notifications, health timeline, medical ID, profile, visits. Login with national ID + PIN.
+- **`/doctor/*`** — desktop clinical portal: dashboard, patient search, schedule, consent management, consultations with `AIChatPanel` (streaming AI responses), `SOAPEditor` (editable AI-drafted summary sections: Chief Complaint / HPI / Findings / Assessment / Plan), `DifferentialList`, `PrescriptionCard`, AI consultation page, access history, audit views.
+- **`/admin/*`** — admin console: dashboard, appointments, doctors, facilities, schedules, reports, settings (backed by the `/api/v1/admin` + appointment admin endpoints).
+- **`/demo`** — split-screen demo mode: doctor portal in a sandboxed `<iframe>` on the left, the patient app in a second iframe **wrapped in a realistic `PhoneFrame`** (CSS-simulated smartphone) on the right, with a scripted 10-step Healthathon walkthrough (Introduction → logins → Search Patient → Request Consent → patient receives/approves → doctor sees approval → AI-Assisted Consultation → Patient Sees Updated Record) with keyboard shortcuts, per-step auto-advance timers, and a collapsible narration panel. This exists so the full patient-doctor story can be shown on one screen, no second device needed.
 
-**State**: `providers/` — `AuthProvider` (JWT access+refresh tokens, auto-refresh), `WebSocketProvider` (live notifications, reconnect + heartbeat, consent-event handling), `QueryProvider` (React Query caching), `ToastProvider`. `middleware.ts` gates `/doctor/*` and `/patient/*` routes. `lib/api.ts` is a fully typed API client with a relative base URL `/api/v1` — requests are proxied through Next.js rewrites to the FastAPI backend, unwrapping the `{success, data, errors}` envelope and handling 401s with refresh-and-retry.
+**State**: `providers/` — `AuthProvider` (JWT access+refresh tokens, auto-refresh), `WebSocketProvider` (live notifications, reconnect + heartbeat, consent/appointment-event handling), `QueryProvider` (React Query caching), `ToastProvider`. `middleware.ts` gates `/doctor/*` and `/patient/*` routes. `lib/api.ts` is a fully typed API client with a relative base URL `/api/v1` — requests are proxied through Next.js rewrites to the FastAPI backend, unwrapping the `{success, data, errors}` envelope and handling 401s with refresh-and-retry (browser-facing URLs never expose internal Docker hostnames).
 
-**Tests**: Vitest + React Testing Library (`__tests__/`) covering PhoneFrame, StatusBadge, doctor dashboard, and the AI consultation page.
+**Tests**: Vitest + React Testing Library (`__tests__/`) covering PhoneFrame, StatusBadge, doctor dashboard, and the AI consultation page — run with `npm test` (vitest).
 
 ## Design docs (`docs/`)
 
-13 numbered documents — this repo was spec-first, so the docs describe intent in depth. Read in order: 00 Project Index → 01 PRD → 02 Technical Architecture → 03 Design System (color/typography tokens) → 04 Implementation Plan → 05 API Contract (envelope responses, versioning) → 06 Database Schema → 07 Master Generation Prompt → 08 Coding Standards → 09 Deployment Guide → 10 UI Screen Spec → 11 User Flows & State Machines (+ `wireframes.html`). The Project Index defines the precedence if documents conflict: PRD wins over architecture, which wins over the API contract, and so on.
+15 numbered documents — this repo was spec-first, so the docs describe intent in depth. Read in order: 00 Project Index → 01 PRD → 02 Technical Architecture → 03 Design System (color/typography tokens) → 04 Implementation Plan → 05 API Contract (envelope responses, versioning) → 06 Database Schema → 07 Master Generation Prompt → 08 Coding Standards → 09 Deployment Guide → 10 UI Screen Spec → 11 User Flows & State Machines (+ `wireframes.html`) → 12 Appointment Booking System → 13 Real-Time Transcription → 14 AI Assessment Pipeline. The Project Index defines the precedence if documents conflict: PRD wins over architecture, which wins over the API contract, and so on.
 
 ## Running it
 
 ```bash
-cp .env.example .env      # then fill LLM_* and POSTGRES_PASSWORD
-make build && make up     # postgres:5432, redis:6379, backend:8000, frontend:3000
+cp .env.example .env      # then fill LLM_GATEWAY_URL/LLM_API_KEY and POSTGRES_PASSWORD
+make build && make up     # host ports: frontend 3001, backend 8002, postgres 5433, redis 6380
 make migrate              # alembic upgrade head
 make test                 # backend pytest suite
 ```
 
-- Frontend http://localhost:3000 · API http://localhost:8000 · Swagger http://localhost:8000/docs
-- With `DEMO_MODE=true` the app seeds demo data and offers one-click login, so the full consent → consult → record-update story works out of the box.
-- The AI is mock-only by default: every provider (symptom checker, diagnosis, summary, transcription, notification, storage, email) resolves to a `mock_*` implementation until real vendor implementations are written and selected via env vars.
-- The QA system (`app/`) is not part of docker-compose — it runs separately with its own MongoDB and LLM env vars.
+- Frontend http://localhost:3001 · API http://localhost:8002 · Swagger http://localhost:8002/docs
+- Docker Compose is the single way to start services (`make up` / `make down` / `make logs`; `shell-backend` / `shell-frontend` for shells).
+- With `DEMO_MODE=true` the app seeds a realistic demo world and offers one-click login, so the full consent → consult → record-update story works out of the box.
+- Model providers resolve by env: `mock` by default; set `AI_PROVIDER` / `SYMPTOM_PROVIDER` / `SUMMARY_PROVIDER` / `TRANSCRIPTION_PROVIDER` to `gateway` (or `ccaimex`) to route through the OpenAI-compatible gateway, or `local` for a locally hosted model. `SKIP_MODEL_DOWNLOAD=true` in compose keeps the backend from pulling large GGUF weights on every start.
+- The QA system (`app/`) is not part of docker-compose — it runs separately with its own PostgreSQL, MinIO, and LLM env vars.
 
 ## One-sentence summary
 
-Mirage is a demo of patient-owned medical records with consent-based doctor access and AI that assists but never decides — built on a deliberately replaceable architecture where the repo's namesake Medical QA System is meant to plug in as one of those replaceable AI providers.
+Mirage is a demo of patient-owned medical records with consent-based doctor access, schedule-driven appointment booking, and AI that assists but never decides — built on a deliberately replaceable architecture where the repo's namesake Medical QA System is meant to plug in as one of those replaceable AI providers.
