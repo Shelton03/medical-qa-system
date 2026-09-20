@@ -4,9 +4,9 @@ A plain-language guide to what this repository is, what it's trying to achieve, 
 
 ## What this repo is
 
-`medical-qa-system` is the home of **Mirage** (`backend/` + `frontend/` + `docs/`) — the standout system and the bulk of the code. Mirage is a full healthcare platform built for a **Healthathon** demonstration: patient-controlled medical records with consent-based doctor access, schedule-driven appointment booking, an admin console, AI-assisted clinical workflows, and real-time updates.
+`medical-qa-system` is **Mirage** — a full healthcare platform built for a **Healthathon** demonstration: patient-controlled medical records with consent-based doctor access, schedule-driven appointment booking, an admin console, AI-assisted clinical workflows, and real-time updates. The platform lives in `backend/` + `frontend/` + `docs/`.
 
-Alongside it sits the repo's namesake original project, the **Medical QA System** (`app/`) — a standalone AI symptom-triage chatbot (FastAPI) that decides at each turn whether to ASK clarifying questions or ANSWER with advice, using LLM self-consistency voting with a safety bias. It is not part of the Mirage deployment; per the design (docs/01 PRD, FR-9) it is the "Existing Symptom Checker" that Mirage can plug in behind a provider interface as one of its replaceable AI providers.
+The system started life as the medical QA chatbot the repo is named for: an AI symptom-triage engine that decides at each turn whether to ASK clarifying questions or ANSWER with advice, using LLM self-consistency voting with a safety bias. Mirage is that idea grown up — the triage DNA became the platform's AI layer (symptom check, assessment, diagnosis drafting), and the original engine is preserved at `app/` as the first generation of the codebase.
 
 The repo lives at `github.com/Shelton03/medical-qa-system`, forked from `github.com/NyashaEysenck/medical-qa-system` (added as `upstream`).
 
@@ -21,9 +21,9 @@ Per `docs/01_Product_Requirements_Document.md`: healthcare information in Zimbab
 - **Transparency**: every view, edit, consent, and access is audit-logged; patients can see who viewed their records.
 - **One 5-minute demo path** (the success metric): doctor logs in → searches patient → requests access → patient approves in real time → doctor reviews history → AI assists consultation → doctor confirms diagnosis and note → record updates → patient sees it instantly.
 
-## How the QA system relates to Mirage
+## How the AI is wired
 
-The PRD (FR-9) defines the intended relationship: the AI symptom assessment "exists as an independent provider", with examples including "Current QA System, OpenAI, Azure, Anthropic, Local LLM". In code:
+Per the PRD (FR-9), the AI symptom assessment "exists as an independent provider" — with examples including "Current QA System, OpenAI, Azure, Anthropic, Local LLM". The code mirrors that:
 
 ```
 backend/app/providers/interfaces/       <- abstract contracts (SymptomCheckerProvider,
@@ -40,9 +40,9 @@ Every model slot resolves the same three ways: `mock` (canned demo data), `gatew
 
 Patient-facing AI output is cleaned server-side before it reaches the UI: generated questions and JSON payloads pass through strippers (`QuestionGenerator._clean_question`, `app/ai/local_llm.clean_json_response`) that remove reasoning traces and formatting artifacts, so model internals never leak to patients.
 
-The root `app/` QA system is not yet wired in as a provider implementation — it sits alongside Mirage as a standalone service with its own `/api/query` endpoint. Building that adapter (implementing `SymptomCheckerProvider`/`AIProvider`) is the integration step the architecture anticipates.
+## The original triage engine (`app/`)
 
-## The Medical QA System (`app/`)
+This is where the system began — the first-generation ASK/ANSWER triage engine, preserved at `app/`. Its decision machinery is the design ancestor of the platform's AI assessment pipeline.
 
 FastAPI + PostgreSQL (SQLAlchemy 2 async) + MinIO for uploaded files, entry `app/main.py`, mounted at `/api` with sub-routers for auth/sessions/contact plus the main `POST /api/query`. Sessions, messages, and contact requests persist to PostgreSQL (`app/db/repositories.py`); uploaded files go to a MinIO bucket (`app/db/storage.py`) with only metadata in an `attachments` table. Pipeline in `app/services/orchestrator.py`:
 
@@ -52,7 +52,7 @@ FastAPI + PostgreSQL (SQLAlchemy 2 async) + MinIO for uploaded files, entry `app
 - `QuestionGenerator` / `AnswerGenerator` — produce the next question or the advice
 - `ConversationSummarizer` — wraps up the session, with escalation to a doctor after >15 user turns
 
-It needs `POSTGRES_URL`/`POSTGRES_PASSWORD`, MinIO `S3_*`, and `LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL` env vars. It is a separate FastAPI app from Mirage's backend — do not confuse the two `app/` packages; only `backend/app/` is the Mirage backend.
+It runs standalone with `POSTGRES_URL`/`POSTGRES_PASSWORD`, MinIO `S3_*`, and `LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL` env vars. Note that `backend/app/` is the platform backend; the engine above predates it.
 
 ## Mirage backend (`backend/`)
 
@@ -118,8 +118,8 @@ make test                 # backend pytest suite
 - Docker Compose is the single way to start services (`make up` / `make down` / `make logs`; `shell-backend` / `shell-frontend` for shells).
 - With `DEMO_MODE=true` the app seeds a realistic demo world and offers one-click login, so the full consent → consult → record-update story works out of the box.
 - Model providers resolve by env: `mock` by default; set `AI_PROVIDER` / `SYMPTOM_PROVIDER` / `SUMMARY_PROVIDER` / `TRANSCRIPTION_PROVIDER` to `gateway` (or `ccaimex`) to route through the OpenAI-compatible gateway, or `local` for a locally hosted model. `SKIP_MODEL_DOWNLOAD=true` in compose keeps the backend from pulling large GGUF weights on every start.
-- The QA system (`app/`) is not part of docker-compose — it runs separately with its own PostgreSQL, MinIO, and LLM env vars.
+- The dockerized stack is the platform; the original triage engine at `app/` remains from the first build and is not part of docker-compose.
 
 ## One-sentence summary
 
-Mirage is a demo of patient-owned medical records with consent-based doctor access, schedule-driven appointment booking, and AI that assists but never decides — built on a deliberately replaceable architecture where the repo's namesake Medical QA System is meant to plug in as one of those replaceable AI providers.
+Mirage is a healthcare platform for patient-owned records, consent-based doctor access, schedule-driven appointment booking, and AI that assists but never decides — grown from a medical QA triage chatbot on a deliberately replaceable, vendor-agnostic AI architecture.
