@@ -4,11 +4,9 @@ A plain-language guide to what this repository is, what it's trying to achieve, 
 
 ## What this repo is
 
-`medical-qa-system` contains **two related but distinct systems**, and understanding the difference is the key to navigating the codebase:
+`medical-qa-system` is the home of **Mirage** (`backend/` + `frontend/` + `docs/`) — the standout system and the bulk of the code. Mirage is a full healthcare platform built for a **Healthathon** demonstration: patient-controlled medical records with consent-based doctor access, schedule-driven appointment booking, an admin console, AI-assisted clinical workflows, and real-time updates.
 
-1. **The Medical QA System** (`app/` at repo root) — the repo's namesake. A standalone AI symptom-triage chatbot: a FastAPI service that runs an interactive medical question-answering session, deciding at each turn whether to **ASK** more clarifying questions or **ANSWER** with advice, using LLM self-consistency voting with a safety bias. This is the original project.
-
-2. **Mirage** (`backend/` + `frontend/` + `docs/`) — the larger, newer system and the bulk of the code. A full healthcare platform built for a **Healthathon** demonstration: patient-controlled medical records with consent-based doctor access, appointment booking, an admin console, AI-assisted clinical workflows, and real-time updates. Its design explicitly treats the Medical QA System as the "Existing Symptom Checker" to be plugged in behind a provider interface (docs/01 PRD, FR-9).
+Alongside it sits the repo's namesake original project, the **Medical QA System** (`app/`) — a standalone AI symptom-triage chatbot (FastAPI) that decides at each turn whether to ASK clarifying questions or ANSWER with advice, using LLM self-consistency voting with a safety bias. It is not part of the Mirage deployment; per the design (docs/01 PRD, FR-9) it is the "Existing Symptom Checker" that Mirage can plug in behind a provider interface as one of its replaceable AI providers.
 
 The repo lives at `github.com/Shelton03/medical-qa-system`, forked from `github.com/NyashaEysenck/medical-qa-system` (added as `upstream`).
 
@@ -23,7 +21,7 @@ Per `docs/01_Product_Requirements_Document.md`: healthcare information in Zimbab
 - **Transparency**: every view, edit, consent, and access is audit-logged; patients can see who viewed their records.
 - **One 5-minute demo path** (the success metric): doctor logs in → searches patient → requests access → patient approves in real time → doctor reviews history → AI assists consultation → doctor confirms diagnosis and note → record updates → patient sees it instantly.
 
-## How the two halves relate
+## How the QA system relates to Mirage
 
 The PRD (FR-9) defines the intended relationship: the AI symptom assessment "exists as an independent provider", with examples including "Current QA System, OpenAI, Azure, Anthropic, Local LLM". In code:
 
